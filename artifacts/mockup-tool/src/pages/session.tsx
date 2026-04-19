@@ -794,7 +794,7 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
   );
 }
 
-function PromptEnhancer({ session }: { session: Session }) {
+function PromptEnhancer({ session, product }: { session: Session; product: Product | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const sessionId = session.id;
@@ -802,327 +802,502 @@ function PromptEnhancer({ session }: { session: Session }) {
   const [prompt, setPrompt] = useState(session.enhancedPrompt || session.finalPrompt || "");
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
-  const [reviseInstruction, setReviseInstruction] = useState("");
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
+  const [reviseText, setReviseText] = useState("");
   const [showRevise, setShowRevise] = useState(false);
-  const [showGenPanel, setShowGenPanel] = useState(false);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [showRewriteConfirm, setShowRewriteConfirm] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState(session.falModelId || "");
+  const [falParams, setFalParams] = useState<Record<string, unknown>>(
+    (session.falParams as Record<string, unknown>) || {}
+  );
+  const [showAdvancedParams, setShowAdvancedParams] = useState(false);
 
   const enhance = useEnhancePrompt();
   const revise = useRevisePrompt();
   const rewrite = useRewritePrompt();
   const updateSession = useUpdateSession();
+  const generateImages = useGenerateImages();
+  const { data: falModels } = useListFalModels();
+
+  const qaAnswers = (session.qaAnswers as QAAnswerLocal[]) ?? [];
+  const productImages: string[] = (session.productImageUrls as string[]) ?? [];
+  const selectedModel = falModels?.find((m: FalModel) => m.id === selectedModelId);
+  const paramsSchema = (selectedModel?.paramsSchema as Record<string, unknown>) || {};
+  const activeSuggestionCount = suggestions.filter((_, i) => !accepted.has(i) && !skipped.has(i)).length;
+
+  const savePromptToDb = (value: string) => {
+    updateSession.mutate(
+      { id: sessionId, data: { enhancedPrompt: value } },
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) }) }
+    );
+  };
 
   const handleEnhance = async () => {
     try {
       const result = await enhance.mutateAsync({ id: sessionId });
       setSuggestions(result.suggestions || []);
       setAccepted(new Set());
+      setSkipped(new Set());
     } catch {
       toast({ title: "Enhancement failed", variant: "destructive" });
     }
   };
 
   const handleRevise = async () => {
-    if (!reviseInstruction) return;
+    if (!reviseText.trim()) return;
     try {
-      const result = await revise.mutateAsync({ id: sessionId, data: { instruction: reviseInstruction } });
+      const result = await revise.mutateAsync({ id: sessionId, data: { instruction: reviseText } });
       setPrompt(result.prompt);
-      setReviseInstruction("");
+      setReviseText("");
       setShowRevise(false);
       setSuggestions([]);
+      savePromptToDb(result.prompt);
+      toast({ title: "Prompt revised" });
     } catch {
       toast({ title: "Revision failed", variant: "destructive" });
     }
   };
 
   const handleRewrite = async () => {
+    setShowRewriteConfirm(false);
     try {
       const result = await rewrite.mutateAsync({ id: sessionId });
       setPrompt(result.prompt);
       setSuggestions([]);
+      savePromptToDb(result.prompt);
+      toast({ title: "Prompt rewritten" });
     } catch {
       toast({ title: "Rewrite failed", variant: "destructive" });
     }
   };
 
-  const acceptSuggestion = (idx: number) => {
-    const s = suggestions[idx];
-    setPrompt((p) => p.replace(s.original, s.replacement));
-    setAccepted((prev) => new Set([...prev, idx]));
+  const handleRegenerate = async () => {
+    setShowRegenConfirm(false);
+    try {
+      await updateSession.mutateAsync({
+        id: sessionId,
+        data: { qaAnswers: [] as never, finalPrompt: null as never, enhancedPrompt: null as never, status: "qa" },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+    } catch {
+      toast({ title: "Failed to regenerate", variant: "destructive" });
+    }
   };
-
-  const savePrompt = () => {
-    updateSession.mutate(
-      { id: sessionId, data: { enhancedPrompt: prompt } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
-          toast({ title: "Prompt saved" });
-        },
-      }
-    );
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Prompt Editor</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Refine your AI-generated prompt before generating images.</p>
-        </div>
-        <Badge variant="secondary">Prompt Ready</Badge>
-      </div>
-
-      <Textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        className="min-h-[180px] font-mono text-sm leading-relaxed"
-        placeholder="Your prompt will appear here..."
-      />
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={handleEnhance} disabled={enhance.isPending}>
-          {enhance.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Wand2 className="w-3.5 h-3.5 mr-1" />}
-          Enhance
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowRevise(!showRevise)}
-        >
-          <Pencil className="w-3.5 h-3.5 mr-1" />
-          Revise
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleRewrite} disabled={rewrite.isPending}>
-          {rewrite.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
-          Rewrite
-        </Button>
-        <Button size="sm" variant="outline" onClick={savePrompt} disabled={updateSession.isPending}>
-          Save
-        </Button>
-      </div>
-
-      {showRevise && (
-        <div className="flex gap-2 animate-in slide-in-from-top-2 duration-200">
-          <Input
-            autoFocus
-            placeholder="e.g. Make the lighting warmer and more dramatic..."
-            value={reviseInstruction}
-            onChange={(e) => setReviseInstruction(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleRevise()}
-          />
-          <Button onClick={handleRevise} disabled={!reviseInstruction || revise.isPending} size="sm">
-            {revise.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-          </Button>
-        </div>
-      )}
-
-      {suggestions.length > 0 && (
-        <div className="space-y-2 pt-2">
-          <p className="text-sm font-medium text-muted-foreground">Suggestions</p>
-          {suggestions.map((s, idx) => (
-            <div
-              key={idx}
-              className={`border rounded-xl p-4 space-y-2 transition-all ${
-                accepted.has(idx) ? "opacity-50 bg-muted/30" : "bg-card border-border/50"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded line-through truncate max-w-[200px]">
-                      {s.original}
-                    </span>
-                    <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                    <span className="text-xs font-mono bg-green-100 text-green-700 px-1.5 py-0.5 rounded truncate max-w-[200px]">
-                      {s.replacement}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{s.reason}</p>
-                </div>
-                {!accepted.has(idx) && (
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => acceptSuggestion(idx)}>
-                      <Check className="w-3.5 h-3.5 text-green-600" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => setAccepted((p) => new Set([...p, idx]))}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="border-t border-border/50 pt-4">
-        <Button className="w-full" onClick={() => setShowGenPanel(true)}>
-          <ImageIcon className="w-4 h-4 mr-2" />
-          Generate Images
-        </Button>
-      </div>
-
-      <GenerationPanel
-        session={session}
-        open={showGenPanel}
-        onClose={() => setShowGenPanel(false)}
-        currentPrompt={prompt}
-      />
-    </div>
-  );
-}
-
-function GenerationPanel({
-  session,
-  open,
-  onClose,
-  currentPrompt,
-}: {
-  session: Session;
-  open: boolean;
-  onClose: () => void;
-  currentPrompt: string;
-}) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { data: falModels } = useListFalModels();
-  const [selectedModelId, setSelectedModelId] = useState(session.falModelId || "");
-  const [falParams, setFalParams] = useState<Record<string, unknown>>(
-    (session.falParams as Record<string, unknown>) || {}
-  );
-  const generateImages = useGenerateImages();
-
-  const selectedModel = falModels?.find((m: FalModel) => m.id === selectedModelId);
-  const schema = (selectedModel?.paramsSchema as Record<string, unknown>) || {};
 
   const handleGenerate = async () => {
     if (!selectedModelId) {
-      toast({ title: "Select a fal.io model first", variant: "destructive" });
+      toast({ title: "Select a model first", variant: "destructive" });
       return;
     }
+    savePromptToDb(prompt);
     try {
       await generateImages.mutateAsync({
-        id: session.id,
+        id: sessionId,
         data: {
           falModelId: selectedModelId,
           falParams: Object.keys(falParams).length ? falParams : undefined,
           imageCount: session.imageCount || undefined,
         },
       });
-      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(session.id) });
-      onClose();
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
     } catch {
-      toast({ title: "Generation failed", variant: "destructive" });
+      toast({ title: "Generation failed. Check your model config and API keys.", variant: "destructive" });
     }
   };
 
+  const acceptSuggestion = (idx: number) => {
+    const s = suggestions[idx];
+    const updated = prompt.replace(s.original, s.replacement);
+    setPrompt(updated);
+    setAccepted((prev) => new Set([...prev, idx]));
+  };
+
+  const acceptAll = () => {
+    let current = prompt;
+    suggestions.forEach((s, idx) => {
+      if (!skipped.has(idx) && !accepted.has(idx)) {
+        current = current.replace(s.original, s.replacement);
+      }
+    });
+    setPrompt(current);
+    setAccepted(new Set(suggestions.map((_, i) => i)));
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Generate Images</DialogTitle>
-          <DialogDescription>Select a fal.io model and configure parameters.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
+    <div className="flex flex-col lg:flex-row -mx-6 min-h-[calc(100vh-10rem)]">
+      {/* ── Left context panel ── */}
+      <div className="lg:w-[280px] xl:w-[320px] shrink-0 border-b lg:border-b-0 lg:border-r border-border/50 bg-muted/20 flex flex-col">
+        <div className="p-5 space-y-5 flex-1 overflow-y-auto">
+          {/* Product */}
           <div className="space-y-1">
-            <Label>fal.io Model</Label>
-            {falModels?.length === 0 ? (
-              <div className="text-sm text-muted-foreground border border-border rounded-lg p-3">
-                No models configured.{" "}
-                <Link href="/settings" className="text-primary underline">
-                  Add one in Settings.
-                </Link>
-              </div>
-            ) : (
-              <Select value={selectedModelId} onValueChange={setSelectedModelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a model..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {falModels?.map((m: FalModel) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Product</p>
+            <p className="text-sm font-semibold leading-snug line-clamp-2">{product?.name ?? "—"}</p>
+            {product?.description && (
+              <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
             )}
           </div>
 
-          {selectedModel && Object.keys(schema).length > 0 && (
-            <div className="border border-border rounded-xl p-4">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Parameters</p>
-              <div className="space-y-3">
-                {Object.entries(schema).map(([key, def]) => {
-                  const d = def as { type?: string; description?: string; default?: unknown };
-                  const value = falParams[key] ?? d.default ?? "";
-                  if (d.type === "boolean") {
-                    return (
-                      <div key={key} className="flex items-center justify-between">
-                        <Label className="text-sm">{key}</Label>
-                        <input
-                          type="checkbox"
-                          checked={!!value}
-                          onChange={(e) => setFalParams((p) => ({ ...p, [key]: e.target.checked }))}
-                        />
-                      </div>
-                    );
-                  }
-                  if (d.type === "number" || d.type === "integer") {
-                    return (
-                      <div key={key} className="space-y-1">
-                        <Label className="text-sm">{key}</Label>
-                        <Input
-                          type="number"
-                          value={String(value)}
-                          onChange={(e) => setFalParams((p) => ({ ...p, [key]: Number(e.target.value) }))}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={key} className="space-y-1">
-                      <Label className="text-sm">{key}</Label>
-                      <Input
-                        value={String(value)}
-                        onChange={(e) => setFalParams((p) => ({ ...p, [key]: e.target.value }))}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                  );
-                })}
+          {/* Mode badges */}
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="text-xs">Option {session.optionType}</Badge>
+            <Badge variant="outline" className="text-xs">{session.outputType}</Badge>
+            {session.referenceStyle && (
+              <Badge variant="outline" className="text-xs">{session.referenceStyle}</Badge>
+            )}
+            {session.outputType === "M2" && session.imageCount && (
+              <Badge variant="outline" className="text-xs">{session.imageCount} images</Badge>
+            )}
+          </div>
+
+          {/* Reference thumbnail (Option B) */}
+          {session.optionType === "B" && session.referenceImageUrl && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Reference</p>
+              <div className="w-full aspect-video bg-muted rounded-lg overflow-hidden border border-border/50">
+                <img src={`/api/storage${session.referenceImageUrl}`} alt="Reference" className="w-full h-full object-cover" />
               </div>
             </div>
           )}
 
-          <div className="pt-1 space-y-1">
-            <Label className="text-xs text-muted-foreground">Prompt Preview</Label>
-            <p className="text-xs text-muted-foreground font-mono line-clamp-3 bg-muted/30 p-2 rounded-lg">
-              {currentPrompt}
-            </p>
-          </div>
+          {/* Product photos */}
+          {productImages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Product Photos</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {productImages.slice(0, 6).map((url, i) => (
+                  <div key={i} className="aspect-square bg-muted rounded-md overflow-hidden border border-border/50">
+                    <img src={`/api/storage${url}`} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
+          {/* Q&A summary */}
+          {qaAnswers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Q&A Summary</p>
+              <div className="space-y-1.5">
+                {qaAnswers.map((qa, i) => (
+                  <div key={i} className="rounded-lg bg-card border border-border/40 p-2.5">
+                    <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-1">{qa.question}</p>
+                    <p className="text-xs font-medium mt-0.5 line-clamp-2">{qa.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Right panel ── */}
+      <div className="flex-1 p-6 lg:p-8 space-y-5 overflow-y-auto">
+        {/* Toolbar */}
+        <div className="flex flex-wrap gap-2">
           <Button
-            className="w-full"
-            onClick={handleGenerate}
-            disabled={!selectedModelId || generateImages.isPending}
+            variant="outline"
+            size="sm"
+            onClick={handleEnhance}
+            disabled={enhance.isPending || revise.isPending || rewrite.isPending}
           >
-            {generateImages.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            {enhance.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
             ) : (
-              <ImageIcon className="w-4 h-4 mr-2" />
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
             )}
-            {generateImages.isPending ? "Generating..." : "Generate"}
+            Enhance
+          </Button>
+          <Button
+            variant={showRevise ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowRevise(!showRevise)}
+          >
+            <Pencil className="w-3.5 h-3.5 mr-1.5" />
+            Revise
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRegenConfirm(true)}
+            disabled={updateSession.isPending}
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Regenerate Q&A
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRewriteConfirm(true)}
+            disabled={rewrite.isPending}
+          >
+            {rewrite.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            Rewrite All
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Revise input */}
+        {showRevise && (
+          <div className="bg-muted/30 border border-border/50 rounded-xl p-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+            <p className="text-sm font-medium">Tell the AI what to change:</p>
+            <Textarea
+              autoFocus
+              placeholder="e.g. Make the background more minimalist and add a hint of autumn colors..."
+              value={reviseText}
+              onChange={(e) => setReviseText(e.target.value)}
+              className="min-h-[80px] text-sm resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowRevise(false); setReviseText(""); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleRevise}
+                disabled={!reviseText.trim() || revise.isPending}
+              >
+                {revise.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null}
+                Apply Revision
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Prompt textarea */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-muted-foreground">Prompt</Label>
+            {updateSession.isPending && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+              </span>
+            )}
+          </div>
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onBlur={() => savePromptToDb(prompt)}
+            className="min-h-[220px] font-mono text-sm leading-relaxed resize-y"
+            placeholder="Your prompt will appear here..."
+            disabled={enhance.isPending || revise.isPending || rewrite.isPending}
+          />
+          <p className="text-xs text-muted-foreground text-right">{prompt.length} characters</p>
+        </div>
+
+        {/* Suggestions panel */}
+        {suggestions.length > 0 && (
+          <div className="space-y-3 border border-amber-200/60 rounded-xl p-4 bg-amber-50/30 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-4 h-4 text-amber-600" />
+                <p className="text-sm font-semibold">Enhancement Suggestions</p>
+                {activeSuggestionCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">{activeSuggestionCount} remaining</Badge>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setSuggestions([])}>
+                Done
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {suggestions.map((s, idx) => {
+                const isAccepted = accepted.has(idx);
+                const isSkipped = skipped.has(idx);
+                const isDone = isAccepted || isSkipped;
+                return (
+                  <div
+                    key={idx}
+                    className={`rounded-xl border p-4 space-y-2 transition-all ${
+                      isDone ? "opacity-40 bg-muted/20 border-border/30" : "bg-card border-border/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">
+                            "{s.original}"
+                          </span>
+                          <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs font-mono bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                            "{s.replacement}"
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{s.reason}</p>
+                      </div>
+                      {isDone ? (
+                        <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
+                          {isAccepted ? "Applied" : "Skipped"}
+                        </span>
+                      ) : (
+                        <div className="flex gap-1 shrink-0">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => acceptSuggestion(idx)}>
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => setSkipped((prev) => new Set([...prev, idx]))}
+                          >
+                            <X className="w-3.5 h-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {activeSuggestionCount > 0 && (
+              <Button variant="outline" size="sm" onClick={acceptAll}>
+                <Check className="w-3.5 h-3.5 mr-1.5" />
+                Accept All
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Generate section */}
+        <div className="border-t border-border/50 pt-5 space-y-4">
+          <div>
+            <p className="text-sm font-semibold">Ready to generate?</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Select a model and generate your mockup images.</p>
+          </div>
+
+          {(!falModels || falModels.length === 0) ? (
+            <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+              <p className="text-sm text-amber-800">
+                No image models configured.{" "}
+                <Link href="/settings" className="font-medium underline">Add one in Settings.</Link>
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">fal.io Model</Label>
+                <Select value={selectedModelId} onValueChange={setSelectedModelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {falModels.map((m: FalModel) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedModel && Object.keys(paramsSchema).length > 0 && (
+                <div className="border border-border/50 rounded-xl overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between p-3 text-xs text-muted-foreground hover:bg-muted/30 transition-colors font-medium"
+                    onClick={() => setShowAdvancedParams(!showAdvancedParams)}
+                  >
+                    Advanced Parameters
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAdvancedParams ? "rotate-90" : ""}`} />
+                  </button>
+                  {showAdvancedParams && (
+                    <div className="p-3 border-t border-border/50 space-y-3">
+                      {Object.entries(paramsSchema).map(([key, def]) => {
+                        const d = def as { type?: string; default?: unknown };
+                        const value = falParams[key] ?? d.default ?? "";
+                        if (d.type === "boolean") {
+                          return (
+                            <div key={key} className="flex items-center justify-between">
+                              <Label className="text-xs">{key}</Label>
+                              <input type="checkbox" checked={!!value} onChange={(e) => setFalParams((p) => ({ ...p, [key]: e.target.checked }))} />
+                            </div>
+                          );
+                        }
+                        if (d.type === "number" || d.type === "integer") {
+                          return (
+                            <div key={key} className="space-y-1">
+                              <Label className="text-xs">{key}</Label>
+                              <Input type="number" value={String(value)} onChange={(e) => setFalParams((p) => ({ ...p, [key]: Number(e.target.value) }))} className="h-8 text-sm" />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={key} className="space-y-1">
+                            <Label className="text-xs">{key}</Label>
+                            <Input value={String(value)} onChange={(e) => setFalParams((p) => ({ ...p, [key]: e.target.value }))} className="h-8 text-sm" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                disabled={!selectedModelId || generateImages.isPending}
+                onClick={handleGenerate}
+              >
+                {generateImages.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-4 h-4 mr-2" />
+                )}
+                {generateImages.isPending
+                  ? "Generating..."
+                  : session.outputType === "M2"
+                  ? `Generate ${session.imageCount || 2} Mockups`
+                  : "Generate Mockup"}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Regenerate Q&A confirm dialog */}
+      <Dialog open={showRegenConfirm} onOpenChange={setShowRegenConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Regenerate Q&A?</DialogTitle>
+            <DialogDescription>
+              This will discard your current prompt and take you back through the questions. Your uploaded images and mode settings will be preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={() => setShowRegenConfirm(false)}>Cancel</Button>
+            <Button onClick={handleRegenerate} disabled={updateSession.isPending}>
+              {updateSession.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Yes, Regenerate
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rewrite confirm dialog */}
+      <Dialog open={showRewriteConfirm} onOpenChange={setShowRewriteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Completely Rewrite Prompt?</DialogTitle>
+            <DialogDescription>
+              The AI will use your session settings and Q&A answers to write a completely fresh prompt from scratch, ignoring the current one.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={() => setShowRewriteConfirm(false)}>Cancel</Button>
+            <Button onClick={handleRewrite} disabled={rewrite.isPending}>
+              {rewrite.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Yes, Rewrite
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -1298,7 +1473,7 @@ export default function SessionPage() {
       case "qa":
         return <QAPhase session={session} product={product ?? null} />;
       case "prompt_ready":
-        return <PromptEnhancer session={session} />;
+        return <PromptEnhancer session={session} product={product ?? null} />;
       case "generating":
         return (
           <div className="flex flex-col items-center justify-center gap-4 py-24">

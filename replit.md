@@ -62,6 +62,7 @@ lib/
 - Phase 3 complete: 5-step WizardModal, UploadZone (presigned GCS), session creation
 - Phase 4 complete: Settings panel (3-tab), per-key API key save, 2-step curl add modal, DynamicParamForm, /api/parse-curl endpoint
 - Phase 5 complete: AI Q&A phase rebuilt, analyze-reference bug fixed, 2-panel QA layout, prompt builder
+- Phase 6 complete: PromptEnhancer rebuilt (2-panel), Regenerate Q&A, Rewrite All confirm dialogs, inline Generate, suggestions panel with Accept/Skip/Accept All
 
 ## Phase 5: AI Q&A + Prompt Builder
 
