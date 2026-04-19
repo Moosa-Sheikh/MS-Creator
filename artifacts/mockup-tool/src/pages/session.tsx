@@ -55,6 +55,7 @@ import {
   Bot,
   MessageSquare,
   Edit2,
+  AlertCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -473,17 +474,19 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
   const [customText, setCustomText] = useState("");
   const [loadingNext, setLoadingNext] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [qaError, setQaError] = useState<string | null>(null);
 
   const hasAnalysis = session.optionType === "B" && !!session.referenceAnalysis;
   const [showAnalysisCard, setShowAnalysisCard] = useState(hasAnalysis && answers.length === 0);
 
-  const getNext = useGetNextQuestion();
-  const submitAnswer = useSubmitAnswer();
+  const getNext = useGetNextQuestion({ mutation: { throwOnError: false } });
+  const submitAnswer = useSubmitAnswer({ mutation: { throwOnError: false } });
   const updateSession = useUpdateSession();
 
   const fetchNextQuestion = async () => {
     if (loadingNext) return;
     setLoadingNext(true);
+    setQaError(null);
     try {
       const q = await getNext.mutateAsync({ id: sessionId });
       if (q.done) {
@@ -494,8 +497,13 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
         setSelectedOption(null);
         setCustomText("");
       }
-    } catch {
-      toast({ title: "Failed to get next question", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("LLM") || msg.includes("model") || msg.includes("config")) {
+        setQaError("No AI model configured. Please add an LLM in Settings to continue.");
+      } else {
+        setQaError("Failed to generate question. Check your connection and try again.");
+      }
     } finally {
       setLoadingNext(false);
     }
@@ -503,7 +511,7 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
 
   useEffect(() => {
     if (!showAnalysisCard && !isDone) {
-      fetchNextQuestion();
+      void fetchNextQuestion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -523,8 +531,13 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
       };
       setAnswers((prev) => [...prev, newAnswer]);
       await fetchNextQuestion();
-    } catch {
-      toast({ title: "Failed to submit answer", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("LLM") || msg.includes("model") || msg.includes("config")) {
+        setQaError("No AI model configured. Please add an LLM in Settings to continue.");
+      } else {
+        toast({ title: "Failed to submit answer", variant: "destructive" });
+      }
     }
   };
 
@@ -684,10 +697,32 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
         )}
 
         {/* Loading first question */}
-        {!showAnalysisCard && loadingNext && !currentQuestion && !isDone && (
+        {!showAnalysisCard && loadingNext && !currentQuestion && !isDone && !qaError && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-16 text-center">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Generating question...</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {qaError && !isDone && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-16 text-center max-w-sm mx-auto">
+            <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-7 h-7 text-destructive" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-semibold">Something went wrong</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{qaError}</p>
+            </div>
+            <div className="flex gap-2 flex-wrap justify-center">
+              <Button variant="outline" size="sm" onClick={() => void fetchNextQuestion()}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry
+              </Button>
+              <Button size="sm" asChild>
+                <a href="/settings">Go to Settings</a>
+              </Button>
+            </div>
           </div>
         )}
 
@@ -813,9 +848,9 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
   );
   const [showAdvancedParams, setShowAdvancedParams] = useState(false);
 
-  const enhance = useEnhancePrompt();
-  const revise = useRevisePrompt();
-  const rewrite = useRewritePrompt();
+  const enhance = useEnhancePrompt({ mutation: { throwOnError: false } });
+  const revise = useRevisePrompt({ mutation: { throwOnError: false } });
+  const rewrite = useRewritePrompt({ mutation: { throwOnError: false } });
   const updateSession = useUpdateSession();
   const generateImages = useGenerateImages();
   const { data: falModels } = useListFalModels();
@@ -839,8 +874,14 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
       setSuggestions(result.suggestions || []);
       setAccepted(new Set());
       setSkipped(new Set());
-    } catch {
-      toast({ title: "Enhancement failed", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isConfig = msg.includes("LLM") || msg.includes("model") || msg.includes("config");
+      toast({
+        title: isConfig ? "No AI model configured" : "Enhancement failed",
+        description: isConfig ? "Please add an LLM in Settings." : undefined,
+        variant: "destructive",
+      });
     }
   };
 
@@ -854,8 +895,14 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
       setSuggestions([]);
       savePromptToDb(result.prompt);
       toast({ title: "Prompt revised" });
-    } catch {
-      toast({ title: "Revision failed", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isConfig = msg.includes("LLM") || msg.includes("model") || msg.includes("config");
+      toast({
+        title: isConfig ? "No AI model configured" : "Revision failed",
+        description: isConfig ? "Please add an LLM in Settings." : undefined,
+        variant: "destructive",
+      });
     }
   };
 
@@ -867,8 +914,14 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
       setSuggestions([]);
       savePromptToDb(result.prompt);
       toast({ title: "Prompt rewritten" });
-    } catch {
-      toast({ title: "Rewrite failed", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isConfig = msg.includes("LLM") || msg.includes("model") || msg.includes("config");
+      toast({
+        title: isConfig ? "No AI model configured" : "Rewrite failed",
+        description: isConfig ? "Please add an LLM in Settings." : undefined,
+        variant: "destructive",
+      });
     }
   };
 
