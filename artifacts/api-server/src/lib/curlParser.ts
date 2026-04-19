@@ -3,6 +3,7 @@ export type ParamSchema = {
     type: "string" | "number" | "boolean" | "integer";
     defaultValue: string | number | boolean | null;
     required: boolean;
+    auto?: boolean;
   };
 };
 
@@ -15,12 +16,50 @@ export type ParsedCurl = {
   defaultValues: Record<string, unknown>;
 };
 
+export type PreviewParam = {
+  key: string;
+  type: "string" | "number" | "boolean" | "integer";
+  defaultValue: string | number | boolean | null;
+  auto: boolean;
+};
+
+export type ParseCurlPreview = {
+  endpoint: string;
+  method: string;
+  params: PreviewParam[];
+  provider?: string;
+  modelId?: string;
+};
+
+const AUTO_FILLED_KEYS = new Set(["prompt", "image_url"]);
+
 function inferType(value: unknown): "string" | "number" | "boolean" | "integer" {
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "number") {
     return Number.isInteger(value) ? "integer" : "number";
   }
   return "string";
+}
+
+function extractBody(lines: string): Record<string, unknown> {
+  const dataMatch =
+    lines.match(/-d\s+'(\{[\s\S]*?\})'\s*$/) ||
+    lines.match(/-d\s+"(\{[\s\S]*?\})"\s*$/) ||
+    lines.match(/--data(?:-raw)?\s+'(\{[\s\S]*?\})'\s*$/) ||
+    lines.match(/--data(?:-raw)?\s+"(\{[\s\S]*?\})"\s*$/) ||
+    lines.match(/-d\s+'(\{[\s\S]*?\})'/) ||
+    lines.match(/-d\s+"(\{[\s\S]*?\})"/) ||
+    lines.match(/--data(?:-raw)?\s+'(\{[\s\S]*?\})'/) ||
+    lines.match(/--data(?:-raw)?\s+"(\{[\s\S]*?\})"/);
+
+  if (dataMatch) {
+    try {
+      return JSON.parse(dataMatch[1]);
+    } catch {
+      return {};
+    }
+  }
+  return {};
 }
 
 export function parseCurlCommand(curl: string): ParsedCurl {
@@ -40,28 +79,23 @@ export function parseCurlCommand(curl: string): ParsedCurl {
     headers[key] = rest.join(": ");
   }
 
-  let body: Record<string, unknown> = {};
-  const dataMatch = lines.match(/-d\s+['"](\{[\s\S]*?\})['"]/) || lines.match(/--data(?:-raw)?\s+['"](\{[\s\S]*?\})['"]/);
-  if (dataMatch) {
-    try {
-      body = JSON.parse(dataMatch[1]);
-    } catch {
-      body = {};
-    }
-  }
+  const body = extractBody(lines);
 
   const paramsSchema: ParamSchema = {};
   const defaultValues: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(body)) {
-    if (key === "prompt" || key === "image_url") continue;
     const type = inferType(value);
+    const auto = AUTO_FILLED_KEYS.has(key);
     paramsSchema[key] = {
       type,
       defaultValue: value as string | number | boolean | null,
-      required: false,
+      required: auto,
+      auto,
     };
-    defaultValues[key] = value;
+    if (!auto) {
+      defaultValues[key] = value;
+    }
   }
 
   return { endpoint, method, headers, body, paramsSchema, defaultValues };
@@ -84,4 +118,26 @@ export function parseLlmCurlCommand(curl: string): ParsedCurl & { provider: stri
   }
 
   return { ...parsed, provider, modelId };
+}
+
+export function parseCurlForPreview(curl: string, type: "fal" | "llm"): ParseCurlPreview {
+  if (type === "llm") {
+    const { endpoint, method, paramsSchema, provider, modelId } = parseLlmCurlCommand(curl);
+    const params: PreviewParam[] = Object.entries(paramsSchema).map(([key, def]) => ({
+      key,
+      type: def.type,
+      defaultValue: def.defaultValue,
+      auto: def.auto ?? AUTO_FILLED_KEYS.has(key),
+    }));
+    return { endpoint, method, params, provider, modelId };
+  } else {
+    const { endpoint, method, paramsSchema } = parseCurlCommand(curl);
+    const params: PreviewParam[] = Object.entries(paramsSchema).map(([key, def]) => ({
+      key,
+      type: def.type,
+      defaultValue: def.defaultValue,
+      auto: def.auto ?? AUTO_FILLED_KEYS.has(key),
+    }));
+    return { endpoint, method, params };
+  }
 }

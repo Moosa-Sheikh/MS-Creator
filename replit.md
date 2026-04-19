@@ -58,4 +58,26 @@ lib/
 ## Build Status
 
 - Phase 1 complete: login, sidebar layout, products dashboard
-- Phase 2+: session wizard, Q&A, prompt enhancer, generation, templates, settings
+- Phase 2 complete: ActiveProductContext, product CRUD, ActiveProductBanner
+- Phase 3 complete: 5-step WizardModal, UploadZone (presigned GCS), session creation
+- Phase 4 complete: Settings panel (3-tab), per-key API key save, 2-step curl add modal, DynamicParamForm, /api/parse-curl endpoint
+
+## Settings Panel (Phase 4)
+
+- `/settings` — 3 tabs: Global Keys | Image Models | Language Models
+- Global Keys: per-key save with Show/Hide toggle; claude_enabled toggle
+- Image Models / Language Models: list + "Add Model" button
+  - Step 1: paste curl → POST /api/parse-curl → preview params
+  - Step 2: name + endpoint + DynamicParamForm (auto label, enable toggle, type inputs)
+  - Edit: opens modal at Step 2 pre-filled; Save calls PATCH with updated defaultValues
+  - Delete: AlertDialog confirmation
+- LLM tab: Activate button (only one active at a time); claude-on warning banner
+- Parser handles prompt/image_url with auto:true; multi-line curl; fal + OpenRouter + Claude
+
+## Key Frontend Files (Phase 4)
+
+- `artifacts/mockup-tool/src/pages/settings.tsx` — main settings page (tabs + inline tab components)
+- `artifacts/mockup-tool/src/components/settings/AddModelModal.tsx` — 2-step add/edit modal
+- `artifacts/mockup-tool/src/components/settings/DynamicParamForm.tsx` — dynamic param form renderer
+- `artifacts/api-server/src/lib/curlParser.ts` — parseCurlCommand, parseLlmCurlCommand, parseCurlForPreview
+- `artifacts/api-server/src/routes/settings.ts` — all settings/fal-models/llm-configs/parse-curl routes

@@ -14,7 +14,7 @@ import {
   ActivateLlmConfigParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { parseCurlCommand, parseLlmCurlCommand } from "../lib/curlParser";
+import { parseCurlCommand, parseLlmCurlCommand, parseCurlForPreview } from "../lib/curlParser";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -82,7 +82,12 @@ router.post("/fal-models", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { endpoint, paramsSchema, defaultValues } = parseCurlCommand(parsed.data.curlCommand);
+    const { endpoint, paramsSchema, defaultValues: parsedDefaults } = parseCurlCommand(parsed.data.curlCommand);
+    const rawBody = req.body as Record<string, unknown>;
+    const defaultValues =
+      rawBody.defaultValues && typeof rawBody.defaultValues === "object" && !Array.isArray(rawBody.defaultValues)
+        ? (rawBody.defaultValues as Record<string, unknown>)
+        : parsedDefaults;
     const [model] = await db.insert(falModelsTable).values({
       name: parsed.data.name,
       endpoint,
@@ -152,7 +157,12 @@ router.post("/llm-configs", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const { endpoint, paramsSchema, defaultValues, provider, modelId } = parseLlmCurlCommand(parsed.data.curlCommand);
+    const { endpoint, paramsSchema, defaultValues: parsedDefaults, provider, modelId } = parseLlmCurlCommand(parsed.data.curlCommand);
+    const rawBody = req.body as Record<string, unknown>;
+    const defaultValues =
+      rawBody.defaultValues && typeof rawBody.defaultValues === "object" && !Array.isArray(rawBody.defaultValues)
+        ? (rawBody.defaultValues as Record<string, unknown>)
+        : parsedDefaults;
     const [config] = await db.insert(llmConfigsTable).values({
       name: parsed.data.name,
       provider,
@@ -216,6 +226,21 @@ router.delete("/llm-configs/:id", async (req, res): Promise<void> => {
   }
   await db.delete(llmConfigsTable).where(eq(llmConfigsTable.id, params.data.id));
   res.sendStatus(204);
+});
+
+router.post("/parse-curl", async (req, res): Promise<void> => {
+  const { curl, type } = req.body as { curl?: string; type?: string };
+  if (!curl || typeof curl !== "string") {
+    res.status(400).json({ error: "curl field is required" });
+    return;
+  }
+  const modelType = type === "llm" ? "llm" : "fal";
+  try {
+    const result = parseCurlForPreview(curl, modelType);
+    res.json(result);
+  } catch (err: unknown) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Failed to parse curl command" });
+  }
 });
 
 router.post("/llm-configs/:id/activate", async (req, res): Promise<void> => {
