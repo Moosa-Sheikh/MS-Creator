@@ -45,15 +45,46 @@ async function callBuiltinAnthropic(messages: LlmMessage[], modelId: string): Pr
   throw new Error("Unexpected Anthropic response format");
 }
 
+async function ensureBuiltinConfig(): Promise<typeof import("@workspace/db").llmConfigsTable.$inferSelect | null> {
+  if (!isBuiltinAvailable()) return null;
+  const defaultModelId = BUILTIN_MODELS[0].id;
+  const defaultModelName = BUILTIN_MODELS[0].name;
+  // Deactivate all and create/activate the default built-in config
+  await db.update(llmConfigsTable).set({ isActive: false });
+  const [existing] = await db.select().from(llmConfigsTable).where(eq(llmConfigsTable.modelId, defaultModelId));
+  if (existing && existing.provider === "replit-anthropic") {
+    const [activated] = await db.update(llmConfigsTable).set({ isActive: true }).where(eq(llmConfigsTable.id, existing.id)).returning();
+    return activated ?? null;
+  }
+  const [created] = await db.insert(llmConfigsTable).values({
+    name: `${defaultModelName} (Built-in)`,
+    provider: "replit-anthropic",
+    modelId: defaultModelId,
+    endpoint: "built-in",
+    curlCommand: "built-in",
+    paramsSchema: {},
+    defaultValues: {},
+    isActive: true,
+  }).returning();
+  return created ?? null;
+}
+
 export async function callActiveLlm(messages: LlmMessage[]): Promise<string> {
-  const [activeConfig] = await db
+  let [activeConfig] = await db
     .select()
     .from(llmConfigsTable)
     .where(eq(llmConfigsTable.isActive, true))
     .limit(1);
 
+  // No active config — auto-activate the built-in model if available
   if (!activeConfig) {
-    throw new Error("No active LLM config found. Please configure an LLM in Settings.");
+    if (isBuiltinAvailable()) {
+      logger.info("No active LLM config, auto-activating built-in model");
+      activeConfig = (await ensureBuiltinConfig())!;
+    }
+    if (!activeConfig) {
+      throw new Error("No AI model configured. Please add an LLM in Settings to continue.");
+    }
   }
 
   // Built-in Anthropic path (no API key needed from user)
