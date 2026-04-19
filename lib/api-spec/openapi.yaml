@@ -3,20 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Etsy Mockup Tool API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: products
+    description: Product management
+  - name: sessions
+    description: Mockup sessions
+  - name: templates
+    description: Session templates
+  - name: settings
+    description: App settings and model configs
+  - name: ai
+    description: AI operations (Q&A, enhance, revise)
+  - name: generation
+    description: Image generation
+  - name: storage
+    description: File storage
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +40,696 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+        "401":
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+
+  /auth/me:
+    get:
+      operationId: getAuthStatus
+      tags: [auth]
+      summary: Get current auth status
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List all products
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductBody"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /products/{id}/stats:
+    get:
+      operationId: getProductStats
+      tags: [products]
+      summary: Get product stats (session count, template count, last activity)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductStats"
+
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List sessions, optionally filtered by product
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionBody"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /sessions/{id}/analyze-reference:
+    post:
+      operationId: analyzeReferenceImage
+      tags: [sessions]
+      summary: Analyze the reference image of a session using AI
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferenceAnalysis"
+
+  /sessions/{id}/qa/next-question:
+    post:
+      operationId: getNextQuestion
+      tags: [ai]
+      summary: Get the next Q&A question from the AI
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Next question or done signal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QAQuestion"
+
+  /sessions/{id}/qa/answer:
+    post:
+      operationId: submitAnswer
+      tags: [ai]
+      summary: Submit an answer to the current Q&A question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitAnswerBody"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{id}/prompt/enhance:
+    post:
+      operationId: enhancePrompt
+      tags: [ai]
+      summary: Enhance the current prompt (find and replace vague words)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Enhancement suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhanceSuggestions"
+
+  /sessions/{id}/prompt/revise:
+    post:
+      operationId: revisePrompt
+      tags: [ai]
+      summary: Revise the prompt based on user instruction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevisePromptBody"
+      responses:
+        "200":
+          description: Revised prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisedPrompt"
+
+  /sessions/{id}/prompt/rewrite:
+    post:
+      operationId: rewritePrompt
+      tags: [ai]
+      summary: Completely rewrite the prompt from scratch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rewritten prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisedPrompt"
+
+  /sessions/{id}/generate:
+    post:
+      operationId: generateImages
+      tags: [generation]
+      summary: Start image generation for a session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateImagesBody"
+      responses:
+        "200":
+          description: Generation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationResult"
+
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List templates, optionally filtered by product
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Create a template from a session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get app settings (API keys masked)
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+  /fal-models:
+    get:
+      operationId: listFalModels
+      tags: [settings]
+      summary: List configured fal.io models
+      responses:
+        "200":
+          description: fal.io models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FalModel"
+    post:
+      operationId: createFalModel
+      tags: [settings]
+      summary: Create/save a fal.io model config (from curl)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFalModelBody"
+      responses:
+        "201":
+          description: Created model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FalModel"
+
+  /fal-models/{id}:
+    patch:
+      operationId: updateFalModel
+      tags: [settings]
+      summary: Update a fal.io model config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFalModelBody"
+      responses:
+        "200":
+          description: Updated model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FalModel"
+    delete:
+      operationId: deleteFalModel
+      tags: [settings]
+      summary: Delete a fal.io model config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /llm-configs:
+    get:
+      operationId: listLlmConfigs
+      tags: [settings]
+      summary: List configured LLM configs
+      responses:
+        "200":
+          description: LLM configs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LlmConfig"
+    post:
+      operationId: createLlmConfig
+      tags: [settings]
+      summary: Create/save an LLM config (from curl)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLlmConfigBody"
+      responses:
+        "201":
+          description: Created config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmConfig"
+
+  /llm-configs/{id}:
+    patch:
+      operationId: updateLlmConfig
+      tags: [settings]
+      summary: Update an LLM config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLlmConfigBody"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmConfig"
+    delete:
+      operationId: deleteLlmConfig
+      tags: [settings]
+      summary: Delete an LLM config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /llm-configs/{id}/activate:
+    post:
+      operationId: activateLlmConfig
+      tags: [settings]
+      summary: Set this LLM config as active
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmConfig"
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +740,590 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    LoginBody:
+      type: object
+      properties:
+        password:
+          type: string
+      required:
+        - password
+
+    AuthStatus:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+      required:
+        - authenticated
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - description
+        - createdAt
+        - updatedAt
+
+    CreateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+
+    UpdateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+
+    ProductStats:
+      type: object
+      properties:
+        sessionCount:
+          type: integer
+        templateCount:
+          type: integer
+        completedSessionCount:
+          type: integer
+        lastSessionAt:
+          type: ["string", "null"]
+      required:
+        - sessionCount
+        - templateCount
+        - completedSessionCount
+        - lastSessionAt
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        productId:
+          type: string
+        optionType:
+          type: ["string", "null"]
+          description: "A or B"
+        outputType:
+          type: ["string", "null"]
+          description: "M1 or M2"
+        imageCount:
+          type: ["integer", "null"]
+          description: "For M2: how many images (2-8)"
+        referenceStyle:
+          type: ["string", "null"]
+          description: "SAME or IDEA (Option B only)"
+        similarityLevel:
+          type: ["integer", "null"]
+          description: "1-100 for SAME mode"
+        productImageUrls:
+          type: array
+          items:
+            type: string
+        referenceImageUrl:
+          type: ["string", "null"]
+        referenceAnalysis:
+          type: ["string", "null"]
+        qaAnswers:
+          type: array
+          items:
+            $ref: "#/components/schemas/QAAnswer"
+        finalPrompt:
+          type: ["string", "null"]
+        enhancedPrompt:
+          type: ["string", "null"]
+        falModelId:
+          type: ["string", "null"]
+        falParams:
+          type: object
+          additionalProperties: true
+        generatedImageUrls:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          description: "draft | prompt_ready | generating | completed | failed"
+        templateInspirationId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - productId
+        - optionType
+        - outputType
+        - imageCount
+        - referenceStyle
+        - similarityLevel
+        - productImageUrls
+        - referenceImageUrl
+        - referenceAnalysis
+        - qaAnswers
+        - finalPrompt
+        - enhancedPrompt
+        - falModelId
+        - falParams
+        - generatedImageUrls
+        - status
+        - templateInspirationId
+        - createdAt
+        - updatedAt
+
+    QAAnswer:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        questionIndex:
+          type: integer
+      required:
+        - question
+        - answer
+        - questionIndex
+
+    CreateSessionBody:
+      type: object
+      properties:
+        productId:
+          type: string
+        optionType:
+          type: string
+        outputType:
+          type: string
+        imageCount:
+          type: ["integer", "null"]
+        referenceStyle:
+          type: ["string", "null"]
+        similarityLevel:
+          type: ["integer", "null"]
+        productImageUrls:
+          type: array
+          items:
+            type: string
+        referenceImageUrl:
+          type: ["string", "null"]
+        templateInspirationId:
+          type: ["string", "null"]
+      required:
+        - productId
+        - optionType
+        - outputType
+        - productImageUrls
+
+    UpdateSessionBody:
+      type: object
+      properties:
+        optionType:
+          type: ["string", "null"]
+        outputType:
+          type: ["string", "null"]
+        imageCount:
+          type: ["integer", "null"]
+        referenceStyle:
+          type: ["string", "null"]
+        similarityLevel:
+          type: ["integer", "null"]
+        productImageUrls:
+          type: array
+          items:
+            type: string
+        referenceImageUrl:
+          type: ["string", "null"]
+        qaAnswers:
+          type: array
+          items:
+            $ref: "#/components/schemas/QAAnswer"
+        finalPrompt:
+          type: ["string", "null"]
+        enhancedPrompt:
+          type: ["string", "null"]
+        falModelId:
+          type: ["string", "null"]
+        falParams:
+          type: object
+          additionalProperties: true
+        generatedImageUrls:
+          type: array
+          items:
+            type: string
+        status:
+          type: ["string", "null"]
+        templateInspirationId:
+          type: ["string", "null"]
+
+    ReferenceAnalysis:
+      type: object
+      properties:
+        analysis:
+          type: string
+        sessionId:
+          type: string
+      required:
+        - analysis
+        - sessionId
+
+    QAQuestion:
+      type: object
+      properties:
+        done:
+          type: boolean
+        question:
+          type: ["string", "null"]
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/QAOption"
+        aiSuggestion:
+          type: ["string", "null"]
+        questionIndex:
+          type: ["integer", "null"]
+        finalPrompt:
+          type: ["string", "null"]
+          description: "Set when done=true, the AI-constructed final prompt"
+      required:
+        - done
+
+    QAOption:
+      type: object
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+      required:
+        - label
+        - description
+
+    SubmitAnswerBody:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        questionIndex:
+          type: integer
+      required:
+        - question
+        - answer
+        - questionIndex
+
+    EnhanceSuggestions:
+      type: object
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnhanceSuggestion"
+      required:
+        - suggestions
+
+    EnhanceSuggestion:
+      type: object
+      properties:
+        original:
+          type: string
+        replacement:
+          type: string
+        reason:
+          type: string
+      required:
+        - original
+        - replacement
+        - reason
+
+    RevisePromptBody:
+      type: object
+      properties:
+        instruction:
+          type: string
+      required:
+        - instruction
+
+    RevisedPrompt:
+      type: object
+      properties:
+        prompt:
+          type: string
+      required:
+        - prompt
+
+    GenerateImagesBody:
+      type: object
+      properties:
+        falModelId:
+          type: string
+        falParams:
+          type: object
+          additionalProperties: true
+        imageCount:
+          type: ["integer", "null"]
+      required:
+        - falModelId
+
+    GenerationResult:
+      type: object
+      properties:
+        imageUrls:
+          type: array
+          items:
+            type: string
+        sessionId:
+          type: string
+      required:
+        - imageUrls
+        - sessionId
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+        productId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          description: "M1 or M2"
+        optionType:
+          type: string
+          description: "A or B"
+        prompt:
+          type: string
+        imageUrls:
+          type: array
+          items:
+            type: string
+        sessionConfig:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - productId
+        - name
+        - type
+        - optionType
+        - prompt
+        - imageUrls
+        - sessionConfig
+        - createdAt
+
+    CreateTemplateBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        name:
+          type: string
+      required:
+        - sessionId
+        - name
+
+    Settings:
+      type: object
+      properties:
+        id:
+          type: string
+        falApiKeySet:
+          type: boolean
+        openrouterApiKeySet:
+          type: boolean
+        claudeApiKeySet:
+          type: boolean
+        claudeEnabled:
+          type: boolean
+      required:
+        - id
+        - falApiKeySet
+        - openrouterApiKeySet
+        - claudeApiKeySet
+        - claudeEnabled
+
+    UpdateSettingsBody:
+      type: object
+      properties:
+        falApiKey:
+          type: ["string", "null"]
+        openrouterApiKey:
+          type: ["string", "null"]
+        claudeApiKey:
+          type: ["string", "null"]
+        claudeEnabled:
+          type: ["boolean", "null"]
+
+    FalModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        endpoint:
+          type: string
+        curlCommand:
+          type: string
+        paramsSchema:
+          type: object
+          additionalProperties: true
+        defaultValues:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - endpoint
+        - curlCommand
+        - paramsSchema
+        - defaultValues
+        - createdAt
+
+    CreateFalModelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        curlCommand:
+          type: string
+      required:
+        - name
+        - curlCommand
+
+    UpdateFalModelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        curlCommand:
+          type: string
+        defaultValues:
+          type: object
+          additionalProperties: true
+
+    LlmConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+          description: "openrouter or claude"
+        modelId:
+          type: string
+        endpoint:
+          type: string
+        systemPrompt:
+          type: ["string", "null"]
+        curlCommand:
+          type: string
+        paramsSchema:
+          type: object
+          additionalProperties: true
+        defaultValues:
+          type: object
+          additionalProperties: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - provider
+        - modelId
+        - endpoint
+        - systemPrompt
+        - curlCommand
+        - paramsSchema
+        - defaultValues
+        - isActive
+        - createdAt
+
+    CreateLlmConfigBody:
+      type: object
+      properties:
+        name:
+          type: string
+        curlCommand:
+          type: string
+        systemPrompt:
+          type: ["string", "null"]
+      required:
+        - name
+        - curlCommand
+
+    UpdateLlmConfigBody:
+      type: object
+      properties:
+        name:
+          type: string
+        curlCommand:
+          type: string
+        systemPrompt:
+          type: ["string", "null"]
+        defaultValues:
+          type: object
+          additionalProperties: true
+        isActive:
+          type: boolean
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath
