@@ -38,7 +38,17 @@ router.post("/sessions/:id/qa/next-question", async (req, res): Promise<void> =>
   if (session.templateInspirationId) {
     const [template] = await db.select().from(templatesTable).where(eq(templatesTable.id, session.templateInspirationId));
     if (template) {
-      templateContext = `\nTemplate inspiration prompt: "${template.prompt}"\n`;
+      const tplConfig = (template.sessionConfig as { qaAnswers?: QAAnswer[] }) ?? {};
+      const tplQA = tplConfig.qaAnswers ?? [];
+      const tplQASummary = tplQA.length
+        ? tplQA.map((a) => `  Q: ${a.question}\n  A: ${a.answer}`).join("\n")
+        : "";
+      templateContext = `
+TEMPLATE INSPIRATION — User chose to base this session on a saved template:
+Template name: "${template.name}"
+Template's proven prompt: "${template.prompt}"
+${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : ""}
+Build on this template's visual direction. Ask questions to explore if the user wants variations, enhancements, or to try something different. Don't just copy the same answers — invite them to refine or improve.`;
     }
   }
 

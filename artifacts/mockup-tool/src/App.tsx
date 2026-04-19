@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import ProductDetail from "@/pages/product-detail";
 import SessionPage from "@/pages/session";
 import SettingsPage from "@/pages/settings";
+import TemplatesPage from "@/pages/templates";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/products/:id" component={ProductDetail} />
       <Route path="/session/:id" component={SessionPage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/templates/:productId" component={TemplatesPage} />
       <Route path="/dashboard">
         <Redirect to="/" />
       </Route>

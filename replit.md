@@ -64,6 +64,7 @@ lib/
 - Phase 5 complete: AI Q&A phase rebuilt, analyze-reference bug fixed, 2-panel QA layout, prompt builder
 - Phase 6 complete: PromptEnhancer rebuilt (2-panel), Regenerate Q&A, Rewrite All confirm dialogs, inline Generate, suggestions panel with Accept/Skip/Accept All
 - Phase 7 complete: GeneratingPanel (pulsing progress, prompt preview, per-image dots), ResultsGallery rebuilt (M1 large/M2 grid, ImageCard with View Full + Download, lightbox, Edit Prompt + Generate Again actions), generation.ts updated (queue polling for async fal models, 3-format image URL extraction, per-image error handling)
+- Phase 8 complete: Template browser page (/templates/:productId) — grid with M1/M2 filter, card thumbnails, "Use" (opens wizard pre-loaded) + delete w/ confirm, template detail modal (image gallery, prompt copy, Q&A summary); ActiveProductBanner navigates to templates and shows real count (fetches own data); TemplatePicker fixed to handle external fal.io image URLs; WizardModal accepts initialTemplateId prop; AI Q&A enhanced with full template context (name, prompt, Q&A history)
 
 ## Phase 5: AI Q&A + Prompt Builder
 

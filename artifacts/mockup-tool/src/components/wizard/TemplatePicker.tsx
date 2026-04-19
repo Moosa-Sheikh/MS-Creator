@@ -12,8 +12,10 @@ type Props = {
   onCancel: () => void;
 };
 
-function objectPathToUrl(objectPath: string): string {
-  const filename = objectPath.replace("/objects/", "");
+function resolveThumbUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const filename = url.replace("/objects/", "");
   return `/api/storage/objects/${filename}`;
 }
 
@@ -54,7 +56,7 @@ export function TemplatePicker({ productId, outputType, selectedId, onSelect, on
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[340px] overflow-y-auto pr-1">
         {filtered.map((tpl) => {
-          const thumb = tpl.imageUrls?.[0] ? objectPathToUrl(tpl.imageUrls[0]) : null;
+          const thumb = tpl.imageUrls?.[0] ? resolveThumbUrl(tpl.imageUrls[0]) : null;
           const isSelected = tpl.id === selectedId;
           return (
             <button

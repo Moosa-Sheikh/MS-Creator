@@ -1,6 +1,7 @@
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Palette, FolderOpen } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useListTemplates, getListTemplatesQueryKey } from "@workspace/api-client-react";
 
 type Props = {
   product: {
@@ -8,19 +9,23 @@ type Props = {
     name: string;
     description: string | null;
   };
-  templateCount?: number;
   onCreateMockup: () => void;
 };
 
-export function ActiveProductBanner({ product, templateCount = 0, onCreateMockup }: Props) {
-  const { toast } = useToast();
+export function ActiveProductBanner({ product, onCreateMockup }: Props) {
+  const [, navigate] = useLocation();
 
-  const handleViewTemplates = () => {
-    toast({
-      title: "Coming soon",
-      description: "Template browsing will be available in a future phase.",
-    });
-  };
+  const { data: templates } = useListTemplates(
+    { productId: product.id },
+    {
+      query: {
+        queryKey: getListTemplatesQueryKey({ productId: product.id }),
+        staleTime: 30_000,
+      },
+    }
+  );
+
+  const templateCount = (templates as unknown[])?.length ?? 0;
 
   return (
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3">
@@ -42,9 +47,13 @@ export function ActiveProductBanner({ product, templateCount = 0, onCreateMockup
           <Palette className="h-4 w-4 mr-2" />
           Create New Mockup
         </Button>
-        <Button size="sm" variant="outline" onClick={handleViewTemplates}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => navigate(`/templates/${product.id}`)}
+        >
           <FolderOpen className="h-4 w-4 mr-2" />
-          View Templates ({templateCount})
+          View Templates{templateCount > 0 ? ` (${templateCount})` : ""}
         </Button>
       </div>
     </div>

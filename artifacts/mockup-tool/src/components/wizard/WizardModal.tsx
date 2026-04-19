@@ -84,12 +84,16 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productId: string;
+  initialTemplateId?: string;
 };
 
-export function WizardModal({ open, onOpenChange, productId }: Props) {
+export function WizardModal({ open, onOpenChange, productId, initialTemplateId }: Props) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [state, setState] = useState<WizardState>(INITIAL_STATE);
+  const [state, setState] = useState<WizardState>(() => ({
+    ...INITIAL_STATE,
+    templateInspirationId: initialTemplateId ?? null,
+  }));
   const [stepIndex, setStepIndex] = useState(0);
   const [confirmClose, setConfirmClose] = useState(false);
 
