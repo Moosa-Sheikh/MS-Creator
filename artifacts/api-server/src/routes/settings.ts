@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCurlCommand, parseLlmCurlCommand, parseCurlForPreview } from "../lib/curlParser";
+import { BUILTIN_MODELS, isBuiltinAvailable } from "../lib/llm";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -226,6 +227,53 @@ router.delete("/llm-configs/:id", async (req, res): Promise<void> => {
   }
   await db.delete(llmConfigsTable).where(eq(llmConfigsTable.id, params.data.id));
   res.sendStatus(204);
+});
+
+router.get("/llm-configs/builtin-status", async (_req, res): Promise<void> => {
+  res.json({ available: isBuiltinAvailable(), models: BUILTIN_MODELS });
+});
+
+router.post("/llm-configs/setup-builtin", async (req, res): Promise<void> => {
+  const { modelId } = req.body as { modelId?: string };
+  if (!modelId || !BUILTIN_MODELS.find((m) => m.id === modelId)) {
+    res.status(400).json({ error: "Invalid modelId" });
+    return;
+  }
+  if (!isBuiltinAvailable()) {
+    res.status(503).json({ error: "Built-in AI integration is not configured" });
+    return;
+  }
+  const model = BUILTIN_MODELS.find((m) => m.id === modelId)!;
+  // Deactivate all existing configs
+  await db.update(llmConfigsTable).set({ isActive: false });
+  // Find or create a built-in config for this modelId
+  const [existing] = await db
+    .select()
+    .from(llmConfigsTable)
+    .where(eq(llmConfigsTable.modelId, modelId));
+  let config;
+  if (existing && existing.provider === "replit-anthropic") {
+    [config] = await db
+      .update(llmConfigsTable)
+      .set({ isActive: true })
+      .where(eq(llmConfigsTable.id, existing.id))
+      .returning();
+  } else {
+    [config] = await db
+      .insert(llmConfigsTable)
+      .values({
+        name: `${model.name} (Built-in)`,
+        provider: "replit-anthropic",
+        modelId,
+        endpoint: "built-in",
+        curlCommand: "built-in",
+        paramsSchema: {},
+        defaultValues: {},
+        isActive: true,
+      })
+      .returning();
+  }
+  res.json(config);
 });
 
 router.post("/parse-curl", async (req, res): Promise<void> => {

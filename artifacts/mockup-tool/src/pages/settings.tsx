@@ -358,6 +358,11 @@ function FalModelsTab() {
   );
 }
 
+const BUILTIN_MODELS = [
+  { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "Balanced — recommended for most tasks" },
+  { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Fastest — best for quick responses" },
+] as const;
+
 function LlmConfigsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -365,23 +370,18 @@ function LlmConfigsTab() {
   const { data: settings } = useGetSettings();
   const [addOpen, setAddOpen] = useState(false);
   const [editData, setEditData] = useState<EditModelData | undefined>(undefined);
+  const [activatingBuiltin, setActivatingBuiltin] = useState<string | null>(null);
 
   const createLlmConfig = useCreateLlmConfig({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
-      },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
     },
   });
-
   const updateLlmConfig = useUpdateLlmConfig({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
-      },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
     },
   });
-
   const deleteLlmConfig = useDeleteLlmConfig({
     mutation: {
       onSuccess: () => {
@@ -390,14 +390,31 @@ function LlmConfigsTab() {
       },
     },
   });
-
   const activateLlmConfig = useActivateLlmConfig({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
-      },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
     },
   });
+
+  async function handleSetupBuiltin(modelId: string) {
+    setActivatingBuiltin(modelId);
+    try {
+      const resp = await fetch(`${import.meta.env.BASE_URL}api/llm-configs/setup-builtin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ modelId }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
+      const model = BUILTIN_MODELS.find((m) => m.id === modelId);
+      toast({ title: `${model?.name ?? modelId} is now active` });
+    } catch {
+      toast({ title: "Failed to activate built-in model", variant: "destructive" });
+    } finally {
+      setActivatingBuiltin(null);
+    }
+  }
 
   function handleEdit(config: LlmConfig) {
     setEditData({
@@ -420,11 +437,7 @@ function LlmConfigsTab() {
     if (editData) {
       await updateLlmConfig.mutateAsync({
         id: editData.id,
-        data: {
-          name: data.name,
-          systemPrompt: data.systemPrompt ?? null,
-          defaultValues: data.defaultValues,
-        },
+        data: { name: data.name, systemPrompt: data.systemPrompt ?? null, defaultValues: data.defaultValues },
       });
       toast({ title: "Config updated" });
     } else {
@@ -443,131 +456,175 @@ function LlmConfigsTab() {
   }
 
   const claudeOn = settings?.claudeEnabled;
+  const activeBuiltinId = llmConfigs?.find((c) => c.provider === "replit-anthropic" && c.isActive)?.modelId ?? null;
+  const customConfigs = (llmConfigs ?? []).filter((c) => c.provider !== "replit-anthropic");
 
   return (
-    <div className="space-y-4 max-w-xl">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Add LLM models by pasting an OpenRouter or Claude curl command.
-        </p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditData(undefined);
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add Config
-        </Button>
+    <div className="space-y-6 max-w-xl">
+
+      {/* ── Built-in Models ── */}
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Built-in Models</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Powered by Claude via Replit AI — no API key required, usage billed to your Replit credits.
+          </p>
+        </div>
+
+        {BUILTIN_MODELS.map((model) => {
+          const isActive = activeBuiltinId === model.id;
+          const isLoading = activatingBuiltin === model.id;
+          return (
+            <div
+              key={model.id}
+              className={`bg-card border rounded-xl p-4 flex items-center justify-between gap-3 transition-all ${
+                isActive ? "border-emerald-400/60 bg-emerald-50/30 dark:bg-emerald-950/10" : "border-border/50"
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm">{model.name}</span>
+                  {isActive && (
+                    <Badge className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:border-emerald-800 dark:text-emerald-400">
+                      <Check className="w-2.5 h-2.5 mr-1" />
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{model.description}</p>
+              </div>
+              {!isActive && (
+                <Button
+                  size="sm"
+                  className="shrink-0 h-8 text-xs"
+                  onClick={() => void handleSetupBuiltin(model.id)}
+                  disabled={!!activatingBuiltin}
+                >
+                  {isLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                  {isLoading ? "Activating…" : "Use This"}
+                </Button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {claudeOn && (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
-          Claude mode is on. OpenRouter configs are inactive while Claude is being used directly.
+      {/* ── Custom (curl-based) configs ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Custom Models</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Add via OpenRouter or Claude API curl command.</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setEditData(undefined); setAddOpen(true); }}
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            Add Config
+          </Button>
         </div>
-      )}
 
-      {!llmConfigs?.length ? (
-        <div className="border-2 border-dashed border-border rounded-xl p-10 text-center">
-          <Settings2 className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm font-medium">No configs yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Add one using an OpenRouter or Claude curl command.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {llmConfigs.map((config) => {
-            const showInactive = claudeOn && !config.isActive;
-            return (
-              <div
-                key={config.id}
-                className={`bg-card border rounded-xl p-4 flex items-start justify-between gap-3 ${
-                  config.isActive ? "border-primary/40" : "border-border/50"
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">{config.name}</span>
-                    {config.isActive && !claudeOn && (
-                      <Badge className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-900">
-                        <Check className="w-2.5 h-2.5 mr-1" />
-                        Active
-                      </Badge>
-                    )}
-                    {showInactive && (
-                      <Badge variant="secondary" className="text-xs text-muted-foreground">
-                        Inactive (Claude mode on)
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {config.provider} — {config.modelId}
-                  </p>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  {!config.isActive && !claudeOn && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => {
-                        activateLlmConfig.mutate({ id: config.id });
-                        toast({ title: `"${config.name}" is now active` });
-                      }}
-                      disabled={activateLlmConfig.isPending}
-                    >
-                      {activateLlmConfig.isPending ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                      ) : (
-                        <Check className="w-3 h-3 mr-1" />
+        {claudeOn && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
+            Claude mode is on. OpenRouter configs are inactive while Claude is being used directly.
+          </div>
+        )}
+
+        {!customConfigs.length ? (
+          <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
+            <Settings2 className="w-7 h-7 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm font-medium">No custom configs</p>
+            <p className="text-xs text-muted-foreground mt-1">Add one using an API curl command above.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {customConfigs.map((config) => {
+              const showInactive = claudeOn && !config.isActive;
+              return (
+                <div
+                  key={config.id}
+                  className={`bg-card border rounded-xl p-4 flex items-start justify-between gap-3 ${
+                    config.isActive ? "border-primary/40" : "border-border/50"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">{config.name}</span>
+                      {config.isActive && !claudeOn && (
+                        <Badge className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-900">
+                          <Check className="w-2.5 h-2.5 mr-1" />
+                          Active
+                        </Badge>
                       )}
-                      Activate
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs gap-1.5"
-                    onClick={() => handleEdit(config)}
-                  >
-                    <Pencil className="w-3 h-3" />
-                    Edit
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                        <Trash2 className="w-3.5 h-3.5" />
+                      {showInactive && (
+                        <Badge variant="secondary" className="text-xs text-muted-foreground">
+                          Inactive (Claude mode on)
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {config.provider} — {config.modelId}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {!config.isActive && !claudeOn && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          activateLlmConfig.mutate({ id: config.id });
+                          toast({ title: `"${config.name}" is now active` });
+                        }}
+                        disabled={activateLlmConfig.isPending}
+                      >
+                        {activateLlmConfig.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                        ) : (
+                          <Check className="w-3 h-3 mr-1" />
+                        )}
+                        Activate
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete "{config.name}"?</AlertDialogTitle>
-                        <AlertDialogDescription>This LLM config will be permanently removed.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          onClick={() => deleteLlmConfig.mutate({ id: config.id })}
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={() => handleEdit(config)}>
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete "{config.name}"?</AlertDialogTitle>
+                          <AlertDialogDescription>This LLM config will be permanently removed.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => deleteLlmConfig.mutate({ id: config.id })}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <AddModelModal
         open={addOpen}
-        onOpenChange={(v) => {
-          setAddOpen(v);
-          if (!v) setEditData(undefined);
-        }}
+        onOpenChange={(v) => { setAddOpen(v); if (!v) setEditData(undefined); }}
         type="llm"
         editData={editData}
         onSave={handleSave}
