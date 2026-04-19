@@ -61,21 +61,31 @@ lib/
 - Phase 2 complete: ActiveProductContext, product CRUD, ActiveProductBanner
 - Phase 3 complete: 5-step WizardModal, UploadZone (presigned GCS), session creation
 - Phase 4 complete: Settings panel (3-tab), per-key API key save, 2-step curl add modal, DynamicParamForm, /api/parse-curl endpoint
+- Phase 5 complete: AI Q&A phase rebuilt, analyze-reference bug fixed, 2-panel QA layout, prompt builder
 
-## Settings Panel (Phase 4)
+## Phase 5: AI Q&A + Prompt Builder
 
-- `/settings` — 3 tabs: Global Keys | Image Models | Language Models
-- Global Keys: per-key save with Show/Hide toggle; claude_enabled toggle
-- Image Models / Language Models: list + "Add Model" button
-  - Step 1: paste curl → POST /api/parse-curl → preview params
-  - Step 2: name + endpoint + DynamicParamForm (auto label, enable toggle, type inputs)
-  - Edit: opens modal at Step 2 pre-filled; Save calls PATCH with updated defaultValues
-  - Delete: AlertDialog confirmation
-- LLM tab: Activate button (only one active at a time); claude-on warning banner
-- Parser handles prompt/image_url with auto:true; multi-line curl; fal + OpenRouter + Claude
+- **Session flow**: draft → analyzing → qa → prompt_ready → generating → completed/failed
+- **analyze-reference bug fix**: route now sets `status: "qa"` after completion; downloads image as base64 for LLM vision
+- **QAPhase rebuilt** as 2-panel layout:
+  - **Left panel**: product name/description, mode badges (Option A/B, M1/M2), reference image thumbnail, product photo thumbnails, progress bar ("N of ~8"), answered questions list with click-to-edit
+  - **Right panel**: analysis result card (Option B first time) → question cards → done state
+  - Auto-fetches first question on mount (no "Start Q&A" button)
+  - Click-to-edit: truncates answers in DB and re-fetches that question
+  - AI suggestion shown as italic boxed text with bot icon
+  - Option descriptions shown below each option label
+  - Always-visible free text field (selecting option clears text, typing clears selection)
+  - "Question N of ~8" progress counter
+- **PromptEnhancer**: enhance (find vague words) / revise (specific instruction) / rewrite (full new prompt)
+- **GenerationPanel**: select fal.io model + dynamic params → trigger generation
+- **ResultsGallery**: image grid with download + fullscreen + save-as-template
 
-## Key Frontend Files (Phase 4)
+## Key Files (Phase 5)
 
+- `artifacts/mockup-tool/src/pages/session.tsx` — QAPhase (2-panel), PromptEnhancer, GenerationPanel, ResultsGallery, WizardStep, SessionPage
+- `artifacts/api-server/src/routes/sessions.ts` — session CRUD + analyze-reference (now sets status="qa", base64 vision)
+- `artifacts/api-server/src/routes/ai.ts` — next-question, submit-answer, enhance, revise, rewrite routes
+- `artifacts/api-server/src/lib/llm.ts` — callActiveLlm (active LLM config from DB)
 - `artifacts/mockup-tool/src/pages/settings.tsx` — main settings page (tabs + inline tab components)
 - `artifacts/mockup-tool/src/components/settings/AddModelModal.tsx` — 2-step add/edit modal
 - `artifacts/mockup-tool/src/components/settings/DynamicParamForm.tsx` — dynamic param form renderer

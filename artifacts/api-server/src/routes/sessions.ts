@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { callActiveLlm } from "../lib/llm";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -132,39 +133,67 @@ router.post("/sessions/:id/analyze-reference", async (req, res): Promise<void> =
   }
 
   try {
-    const analysis = await callActiveLlm([
+    // Download image from object storage and convert to base64 data URL for LLM vision
+    const storageService = new ObjectStorageService();
+    let imageContent: { type: string; image_url?: { url: string }; text?: string };
+    try {
+      const file = await storageService.getObjectEntityFile(session.referenceImageUrl);
+      const [metadata] = await file.getMetadata();
+      const [buffer] = await file.download();
+      const mimeType = (metadata.contentType as string) || "image/jpeg";
+      const base64 = buffer.toString("base64");
+      imageContent = { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } };
+    } catch {
+      // Fallback: try using the objectPath directly (may work if publicly accessible)
+      imageContent = { type: "image_url", image_url: { url: session.referenceImageUrl } };
+    }
+
+    const rawAnalysis = await callActiveLlm([
       {
         role: "user",
         content: [
           {
             type: "text",
-            text: `Analyze this product mockup reference image for an Etsy seller. Extract and describe in detail:
-1. Background setting and environment
-2. Lighting style (direction, quality, mood)
-3. Product placement and composition
-4. Props and styling elements
-5. Overall mood and aesthetic
-6. Photography style
-7. Color palette
+            text: `You are an expert Etsy product mockup analyst. Analyze this reference mockup image and extract the key visual characteristics.
 
-Be specific and visual. This will be used to help recreate or draw inspiration from this mockup style.`,
+Return ONLY valid JSON with these exact keys (no markdown, no explanation):
+{
+  "background": "description of the background setting, colors, materials, environment",
+  "lighting": "lighting style, direction, warmth, quality",
+  "placement": "how the product is placed, angle, composition",
+  "props": "any props, accessories, or additional elements in the scene",
+  "mood": "overall mood and aesthetic style",
+  "photography_style": "photography style (lifestyle/flat lay/close-up/studio/etc.)",
+  "additional_notes": "any other notable visual characteristics worth capturing"
+}`,
           },
-          {
-            type: "image_url",
-            image_url: { url: session.referenceImageUrl },
-          },
+          imageContent as Record<string, unknown>,
         ],
       },
     ]);
 
+    // Parse JSON — fall back to storing raw text if parsing fails
+    let analysisData: Record<string, string>;
+    try {
+      const jsonMatch = rawAnalysis.match(/\{[\s\S]*\}/);
+      analysisData = jsonMatch ? JSON.parse(jsonMatch[0]) : { additional_notes: rawAnalysis };
+    } catch {
+      analysisData = { additional_notes: rawAnalysis };
+    }
+
     await db
       .update(sessionsTable)
-      .set({ referenceAnalysis: analysis, updatedAt: new Date() })
+      .set({ referenceAnalysis: JSON.stringify(analysisData), status: "qa", updatedAt: new Date() })
       .where(eq(sessionsTable.id, session.id));
 
-    res.json({ analysis, sessionId: session.id });
+    res.json({ analysis: analysisData, sessionId: session.id });
   } catch (err: unknown) {
     req.log.error({ err }, "Failed to analyze reference image");
+    // Even if analysis fails, transition to Q&A so user isn't stuck
+    await db
+      .update(sessionsTable)
+      .set({ status: "qa", updatedAt: new Date() })
+      .where(eq(sessionsTable.id, session.id));
     res.status(500).json({ error: err instanceof Error ? err.message : "Failed to analyze image" });
   }
 });

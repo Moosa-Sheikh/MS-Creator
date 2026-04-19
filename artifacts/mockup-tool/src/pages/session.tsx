@@ -1,5 +1,5 @@
 import { useParams, useLocation, Link } from "wouter";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { AppLayout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import {
   useGetSession,
+  useGetProduct,
   useUpdateSession,
   useAnalyzeReferenceImage,
   useGetNextQuestion,
@@ -30,6 +31,7 @@ import {
   useListFalModels,
   useRequestUploadUrl,
   getGetSessionQueryKey,
+  getGetProductQueryKey,
   getListTemplatesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,6 +52,9 @@ import {
   ArrowRight,
   Pencil,
   RotateCcw,
+  Bot,
+  MessageSquare,
+  Edit2,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,6 +63,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+type Product = { id: string; name: string; description?: string | null };
 
 function UploadZone({
   label,
@@ -443,31 +450,49 @@ function WizardStep({
   );
 }
 
-function QAPhase({ session }: { session: Session }) {
+type QAAnswerLocal = { question: string; answer: string; questionIndex: number };
+
+const ANALYSIS_LABELS: Record<string, string> = {
+  background: "Background",
+  lighting: "Lighting",
+  placement: "Placement",
+  props: "Props & Styling",
+  mood: "Mood & Aesthetic",
+  photography_style: "Photography Style",
+  additional_notes: "Additional Notes",
+};
+
+function QAPhase({ session, product }: { session: Session; product: Product | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const sessionId = session.id;
+
+  const [answers, setAnswers] = useState<QAAnswerLocal[]>((session.qaAnswers as QAAnswerLocal[]) ?? []);
   const [currentQuestion, setCurrentQuestion] = useState<QAQuestion | null>(null);
-  const [selectedAnswer, setSelectedAnswer] = useState("");
-  const [otherText, setOtherText] = useState("");
-  const [questionIndex, setQuestionIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [customText, setCustomText] = useState("");
   const [loadingNext, setLoadingNext] = useState(false);
-  const [done, setDone] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+
+  const hasAnalysis = session.optionType === "B" && !!session.referenceAnalysis;
+  const [showAnalysisCard, setShowAnalysisCard] = useState(hasAnalysis && answers.length === 0);
 
   const getNext = useGetNextQuestion();
   const submitAnswer = useSubmitAnswer();
+  const updateSession = useUpdateSession();
 
   const fetchNextQuestion = async () => {
+    if (loadingNext) return;
     setLoadingNext(true);
     try {
       const q = await getNext.mutateAsync({ id: sessionId });
       if (q.done) {
-        setDone(true);
+        setIsDone(true);
         queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
       } else {
         setCurrentQuestion(q);
-        setSelectedAnswer("");
-        setOtherText("");
+        setSelectedOption(null);
+        setCustomText("");
       }
     } catch {
       toast({ title: "Failed to get next question", variant: "destructive" });
@@ -476,120 +501,294 @@ function QAPhase({ session }: { session: Session }) {
     }
   };
 
-  const handleSubmit = async () => {
-    const answer = selectedAnswer === "__other__" ? otherText : selectedAnswer;
-    if (!answer || !currentQuestion) return;
+  useEffect(() => {
+    if (!showAnalysisCard && !isDone) {
+      fetchNextQuestion();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleNext = async () => {
+    const finalAnswer = selectedOption ?? customText.trim();
+    if (!finalAnswer || !currentQuestion) return;
     try {
       await submitAnswer.mutateAsync({
         id: sessionId,
-        data: { question: currentQuestion.question ?? "", answer, questionIndex },
+        data: { question: currentQuestion.question ?? "", answer: finalAnswer, questionIndex: answers.length },
       });
-      setQuestionIndex((i) => i + 1);
+      const newAnswer: QAAnswerLocal = {
+        question: currentQuestion.question ?? "",
+        answer: finalAnswer,
+        questionIndex: answers.length,
+      };
+      setAnswers((prev) => [...prev, newAnswer]);
       await fetchNextQuestion();
     } catch {
       toast({ title: "Failed to submit answer", variant: "destructive" });
     }
   };
 
-  if (loadingNext && !currentQuestion && !done) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Generating question...</p>
-      </div>
-    );
+  const handleEditQuestion = async (index: number) => {
+    const truncated = answers.slice(0, index);
+    setAnswers(truncated);
+    setCurrentQuestion(null);
+    setSelectedOption(null);
+    setCustomText("");
+    try {
+      await updateSession.mutateAsync({ id: sessionId, data: { qaAnswers: truncated as never } });
+      await fetchNextQuestion();
+    } catch {
+      toast({ title: "Failed to go back", variant: "destructive" });
+    }
+  };
+
+  let analysisData: Record<string, string> | null = null;
+  if (session.referenceAnalysis) {
+    try {
+      analysisData = JSON.parse(session.referenceAnalysis as string) as Record<string, string>;
+    } catch {
+      analysisData = { additional_notes: String(session.referenceAnalysis) };
+    }
   }
 
-  if (!currentQuestion && !done) {
-    return (
-      <div className="max-w-xl mx-auto text-center py-20 space-y-4">
-        <h2 className="text-2xl font-bold">Q&A Session</h2>
-        <p className="text-muted-foreground text-sm">
-          Answer a few questions to build your ideal mockup prompt.
-        </p>
-        <Button onClick={fetchNextQuestion} disabled={loadingNext}>
-          {loadingNext ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Start Q&A
-        </Button>
-      </div>
-    );
-  }
+  const progressPct = Math.min((answers.length / 8) * 100, 100);
+  const canSubmit = selectedOption !== null || customText.trim().length > 0;
 
-  if (done) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20">
-        <Check className="w-12 h-12 text-green-500" />
-        <h2 className="text-2xl font-bold">All done!</h2>
-        <p className="text-muted-foreground text-sm">Building your prompt...</p>
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  const isOther = selectedAnswer === "__other__";
+  const productImages: string[] = (session.productImageUrls as string[]) ?? [];
 
   return (
-    <div className="max-w-xl mx-auto space-y-6 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Question {questionIndex + 1}</p>
-        <Badge variant="secondary" className="text-xs">Q&A Phase</Badge>
+    <div className="flex flex-col lg:flex-row -mx-6 min-h-[calc(100vh-10rem)]">
+      {/* ── Left context panel ── */}
+      <div className="lg:w-[300px] xl:w-[340px] shrink-0 border-b lg:border-b-0 lg:border-r border-border/50 bg-muted/20 flex flex-col">
+        <div className="p-5 space-y-5 flex-1 overflow-y-auto">
+          {/* Product info */}
+          <div className="space-y-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Product</p>
+            <p className="text-sm font-semibold leading-snug line-clamp-2">{product?.name ?? "Loading..."}</p>
+            {product?.description && (
+              <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
+            )}
+          </div>
+
+          {/* Mode badges */}
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="text-xs">Option {session.optionType}</Badge>
+            <Badge variant="outline" className="text-xs">{session.outputType}</Badge>
+            {session.referenceStyle && (
+              <Badge variant="outline" className="text-xs">{session.referenceStyle}</Badge>
+            )}
+            {session.outputType === "M2" && session.imageCount && (
+              <Badge variant="outline" className="text-xs">{session.imageCount} images</Badge>
+            )}
+          </div>
+
+          {/* Reference thumbnail (Option B) */}
+          {session.optionType === "B" && session.referenceImageUrl && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Reference Image</p>
+              <div className="w-full aspect-video bg-muted rounded-lg overflow-hidden border border-border/50">
+                <img
+                  src={`/api/storage${session.referenceImageUrl}`}
+                  alt="Reference"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Product photos */}
+          {productImages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Product Photos</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {productImages.slice(0, 6).map((url, i) => (
+                  <div key={i} className="aspect-square bg-muted rounded-md overflow-hidden border border-border/50">
+                    <img src={`/api/storage${url}`} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Progress */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Progress</p>
+              <p className="text-xs text-muted-foreground">{answers.length} of ~8</p>
+            </div>
+            <Progress value={progressPct} className="h-1.5" />
+          </div>
+
+          {/* Answered questions */}
+          {answers.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Answers</p>
+              <div className="space-y-1.5">
+                {answers.map((qa, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleEditQuestion(i)}
+                    className="w-full text-left group rounded-lg border border-border/40 hover:border-primary/40 bg-card hover:bg-primary/5 p-2.5 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-muted-foreground line-clamp-1 leading-relaxed">{qa.question}</p>
+                        <p className="text-xs font-medium text-foreground line-clamp-1 mt-0.5">{qa.answer}</p>
+                      </div>
+                      <Edit2 className="w-3 h-3 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <h2 className="text-xl font-semibold leading-snug">{currentQuestion!.question}</h2>
+      {/* ── Right content panel ── */}
+      <div className="flex-1 flex flex-col p-6 lg:p-8">
 
-      <div className="space-y-2">
-        {(currentQuestion!.options ?? []).map((opt) => (
-          <button
-            key={opt.label}
-            onClick={() => setSelectedAnswer(opt.label)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 ${
-              selectedAnswer === opt.label
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <div
-              className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                selectedAnswer === opt.label ? "border-primary bg-primary" : "border-muted-foreground"
-              }`}
+        {/* Analysis card (Option B, shown before first question) */}
+        {showAnalysisCard && analysisData && (
+          <div className="flex-1 space-y-6 animate-in fade-in duration-300">
+            <div>
+              <h2 className="text-xl font-bold">Reference Image Analysis</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Here is what our AI detected from your reference image. These insights will guide the Q&A.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(analysisData).map(([key, value]) => {
+                if (!value) return null;
+                return (
+                  <div key={key} className="rounded-xl border border-border/50 bg-card p-4 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {ANALYSIS_LABELS[key] ?? key}
+                    </p>
+                    <p className="text-sm leading-relaxed">{value}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <Button
+              className="mt-2"
+              onClick={() => {
+                setShowAnalysisCard(false);
+                fetchNextQuestion();
+              }}
             >
-              {selectedAnswer === opt.label && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-            </div>
-            <div className="min-w-0">
-              <span className="text-sm font-medium">{opt.label}</span>
-              {currentQuestion!.aiSuggestion === opt.label && (
-                <Badge variant="secondary" className="ml-2 text-xs">Suggested</Badge>
-              )}
-            </div>
-          </button>
-        ))}
-        <button
-          onClick={() => setSelectedAnswer("__other__")}
-          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-            isOther ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
-          }`}
-        >
-          <span className="text-sm font-medium text-muted-foreground">Other...</span>
-        </button>
-        {isOther && (
-          <Input
-            autoFocus
-            placeholder="Type your own answer..."
-            value={otherText}
-            onChange={(e) => setOtherText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          />
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Continue to Questions
+            </Button>
+          </div>
         )}
-      </div>
 
-      <div className="flex justify-end pt-2">
-        <Button
-          onClick={handleSubmit}
-          disabled={!selectedAnswer || (isOther && !otherText) || submitAnswer.isPending || loadingNext}
-        >
-          {submitAnswer.isPending || loadingNext ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Next <ArrowRight className="w-4 h-4 ml-1" />
-        </Button>
+        {/* Loading first question */}
+        {!showAnalysisCard && loadingNext && !currentQuestion && !isDone && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Generating question...</p>
+          </div>
+        )}
+
+        {/* Done state */}
+        {isDone && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+              <Check className="w-7 h-7 text-green-600" />
+            </div>
+            <h2 className="text-xl font-bold">Q&A Complete</h2>
+            <p className="text-muted-foreground text-sm">Building your prompt...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {/* Question card */}
+        {!showAnalysisCard && currentQuestion && !isDone && (
+          <div className="flex-1 space-y-6 animate-in fade-in duration-200">
+            {/* Counter */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">
+                Question {answers.length + 1} of ~8
+              </p>
+              <Badge variant="secondary" className="text-xs">Q&A</Badge>
+            </div>
+
+            {/* Question text */}
+            <h2 className="text-xl font-bold leading-snug">{currentQuestion.question}</h2>
+
+            {/* AI suggestion */}
+            {currentQuestion.aiSuggestion && (
+              <div className="flex items-start gap-2.5 bg-muted/40 border border-border/40 rounded-xl p-3.5">
+                <Bot className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-sm text-muted-foreground italic leading-relaxed">{currentQuestion.aiSuggestion}</p>
+              </div>
+            )}
+
+            {/* Options */}
+            <div className="space-y-2">
+              {(currentQuestion.options ?? []).map((opt) => {
+                const isSelected = selectedOption === opt.label;
+                return (
+                  <button
+                    key={opt.label}
+                    onClick={() => {
+                      setSelectedOption(isSelected ? null : opt.label);
+                      if (!isSelected) setCustomText("");
+                    }}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 ${
+                      isSelected
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/30 bg-card"
+                    }`}
+                  >
+                    <div
+                      className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                        isSelected ? "border-primary bg-primary" : "border-muted-foreground"
+                      }`}
+                    >
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      {opt.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.description}</p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom text (always visible) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Or describe your own idea:</Label>
+              <Input
+                placeholder="Type your own answer..."
+                value={customText}
+                onChange={(e) => {
+                  setCustomText(e.target.value);
+                  if (e.target.value) setSelectedOption(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && canSubmit && handleNext()}
+              />
+            </div>
+
+            {/* Next button */}
+            <div className="flex justify-end pt-1">
+              <Button
+                onClick={handleNext}
+                disabled={!canSubmit || submitAnswer.isPending || loadingNext}
+              >
+                {submitAnswer.isPending || loadingNext ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : null}
+                Next
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1060,6 +1259,13 @@ export default function SessionPage() {
     },
   });
 
+  const { data: product } = useGetProduct(session?.productId ?? "", {
+    query: {
+      enabled: !!session?.productId,
+      queryKey: getGetProductQueryKey(session?.productId ?? ""),
+    },
+  });
+
   if (isLoading || !session) {
     return (
       <AppLayout>
@@ -1090,7 +1296,7 @@ export default function SessionPage() {
           </div>
         );
       case "qa":
-        return <QAPhase session={session} />;
+        return <QAPhase session={session} product={product ?? null} />;
       case "prompt_ready":
         return <PromptEnhancer session={session} />;
       case "generating":
@@ -1121,10 +1327,12 @@ export default function SessionPage() {
     }
   };
 
+  const isQAPhase = session.status === "qa";
+
   return (
     <AppLayout>
       <div className="animate-in fade-in duration-300">
-        <div className="flex items-center gap-3 mb-8">
+        <div className={`flex items-center gap-3 ${isQAPhase ? "mb-4 px-6" : "mb-8"}`}>
           <Link href={`/products/${session.productId}`}>
             <Button variant="ghost" size="icon">
               <ChevronLeft className="w-4 h-4" />
