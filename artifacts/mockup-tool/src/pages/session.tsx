@@ -1301,13 +1301,117 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
   );
 }
 
-function ResultsGallery({ session }: { session: Session }) {
+function resolveImageUrl(url: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `/api/storage${url}`;
+}
+
+function ImageCard({
+  url,
+  index,
+  onView,
+  large,
+}: {
+  url: string;
+  index: number;
+  onView: () => void;
+  large?: boolean;
+}) {
+  const src = resolveImageUrl(url);
+  const filename = `mockup-${index + 1}.jpg`;
+  return (
+    <div
+      className={`group relative bg-muted rounded-xl overflow-hidden border border-border/50 ${
+        large ? "aspect-[4/3] max-w-2xl mx-auto w-full" : "aspect-square"
+      }`}
+    >
+      <img
+        src={src}
+        alt={`Generated mockup ${index + 1}`}
+        className="w-full h-full object-cover cursor-pointer"
+        onClick={onView}
+      />
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+        <button
+          onClick={onView}
+          className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          View Full
+        </button>
+        <a
+          href={src}
+          download={filename}
+          target="_blank"
+          rel="noreferrer"
+          className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Download className="w-3.5 h-3.5" />
+          Download
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function GeneratingPanel({ session }: { session: Session }) {
+  const imageCount = session.outputType === "M2" ? (session.imageCount || 2) : 1;
+  const prompt = session.enhancedPrompt || session.finalPrompt || "";
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-8 py-20 max-w-lg mx-auto text-center animate-in fade-in duration-300">
+      <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
+        <Loader2 className="w-9 h-9 text-primary animate-spin" />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold">
+          {imageCount === 1 ? "Generating Mockup..." : `Generating ${imageCount} Mockups...`}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Your images are being created by fal.io. This usually takes 15–60 seconds per image.
+        </p>
+      </div>
+
+      {/* Animated progress bar */}
+      <div className="w-full max-w-sm space-y-2">
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
+        </div>
+        {imageCount > 1 && (
+          <div className="flex justify-center gap-1.5">
+            {Array.from({ length: imageCount }).map((_, i) => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-muted animate-pulse"
+                style={{ animationDelay: `${i * 200}ms` }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {prompt && (
+        <div className="w-full text-left bg-muted/40 border border-border/40 rounded-xl p-4 space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Prompt</p>
+          <p className="text-xs font-mono text-foreground leading-relaxed line-clamp-4">{prompt}</p>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">The page will update automatically when ready.</p>
+    </div>
+  );
+}
+
+function ResultsGallery({ session, product }: { session: Session; product: Product | null }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saveOpen, setSaveOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
 
+  const updateSession = useUpdateSession();
   const createTemplate = useCreateTemplate({
     mutation: {
       onSuccess: () => {
@@ -1322,66 +1426,78 @@ function ResultsGallery({ session }: { session: Session }) {
     },
   });
 
-  const images: string[] = session.generatedImageUrls || [];
+  const images: string[] = (session.generatedImageUrls as string[]) || [];
+  const isM2 = session.outputType === "M2";
+  const prompt = session.enhancedPrompt || session.finalPrompt || "";
+
+  const goBack = (status: string) => {
+    updateSession.mutate(
+      { id: session.id, data: { status: status as never } },
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(session.id) }) }
+    );
+  };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-12">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Generated Mockups</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{images.length} image{images.length !== 1 ? "s" : ""} generated</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+              <Check className="w-3.5 h-3.5 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold">
+              {isM2
+                ? `${images.length} Mockup${images.length !== 1 ? "s" : ""} Generated`
+                : "Your Mockup is Ready"}
+            </h2>
+          </div>
+          {product?.name && (
+            <p className="text-sm text-muted-foreground">{product.name}</p>
+          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => goBack("prompt_ready")} disabled={updateSession.isPending}>
+            <Pencil className="w-3.5 h-3.5 mr-1.5" />
+            Edit Prompt
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => goBack("prompt_ready")} disabled={updateSession.isPending}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Generate Again
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setSaveOpen(true)}>
-            <Bookmark className="w-3.5 h-3.5 mr-1" />
+            <Bookmark className="w-3.5 h-3.5 mr-1.5" />
             Save as Template
           </Button>
-          <Link href={`/products/${session.productId}`}>
-            <Button size="sm" variant="outline">
-              <ChevronLeft className="w-3.5 h-3.5 mr-1" />
-              Back to Product
-            </Button>
-          </Link>
         </div>
       </div>
 
+      {/* Image grid */}
       {images.length === 0 ? (
         <div className="border-2 border-dashed border-border rounded-xl p-20 text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Images are being generated...</p>
+          <p className="text-muted-foreground">No images were generated. Try generating again.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      ) : isM2 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {images.map((url, idx) => (
-            <div key={idx} className="group relative aspect-square bg-muted rounded-xl overflow-hidden border border-border/50">
-              <img
-                src={`/api/storage${url}`}
-                alt={`Generated mockup ${idx + 1}`}
-                className="w-full h-full object-cover cursor-pointer"
-                onClick={() => setFullscreenImg(url)}
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-end justify-end p-2 gap-2 opacity-0 group-hover:opacity-100">
-                <a
-                  href={`/api/storage${url}`}
-                  download={`mockup-${idx + 1}.jpg`}
-                  className="bg-white/90 rounded-lg p-2 hover:bg-white transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Download className="w-4 h-4 text-gray-800" />
-                </a>
-              </div>
-            </div>
+            <ImageCard key={idx} url={url} index={idx} onView={() => setFullscreenImg(url)} />
           ))}
         </div>
-      )}
-
-      {session.finalPrompt && (
-        <div className="bg-card border border-border/50 rounded-xl p-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Final Prompt Used</p>
-          <p className="text-sm font-mono">{session.enhancedPrompt || session.finalPrompt}</p>
+      ) : (
+        <div className="space-y-4">
+          <ImageCard url={images[0]} index={0} onView={() => setFullscreenImg(images[0])} large />
         </div>
       )}
 
+      {/* Prompt used */}
+      {prompt && (
+        <div className="bg-muted/30 border border-border/50 rounded-xl p-4 space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Prompt Used</p>
+          <p className="text-xs font-mono text-foreground leading-relaxed">{prompt}</p>
+        </div>
+      )}
+
+      {/* Save template dialog */}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1394,6 +1510,7 @@ function ResultsGallery({ session }: { session: Session }) {
               placeholder="e.g. Warm Studio Lifestyle Shot"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && templateName && createTemplate.mutate({ data: { sessionId: session.id, name: templateName } })}
             />
             <Button
               className="w-full"
@@ -1408,9 +1525,9 @@ function ResultsGallery({ session }: { session: Session }) {
       </Dialog>
 
       <Dialog open={!!fullscreenImg} onOpenChange={() => setFullscreenImg(null)}>
-        <DialogContent className="max-w-3xl p-2">
+        <DialogContent className="max-w-4xl p-2 bg-black/90 border-none">
           {fullscreenImg && (
-            <img src={`/api/storage${fullscreenImg}`} alt="Full view" className="w-full rounded-lg" />
+            <img src={resolveImageUrl(fullscreenImg)} alt="Full view" className="w-full rounded-lg max-h-[85vh] object-contain" />
           )}
         </DialogContent>
       </Dialog>
@@ -1475,15 +1592,9 @@ export default function SessionPage() {
       case "prompt_ready":
         return <PromptEnhancer session={session} product={product ?? null} />;
       case "generating":
-        return (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
-            <h2 className="text-xl font-semibold">Generating Images</h2>
-            <p className="text-muted-foreground text-sm">Your mockups are being created by fal.io...</p>
-          </div>
-        );
+        return <GeneratingPanel session={session} />;
       case "completed":
-        return <ResultsGallery session={session} />;
+        return <ResultsGallery session={session} product={product ?? null} />;
       case "failed":
         return (
           <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
@@ -1502,7 +1613,7 @@ export default function SessionPage() {
     }
   };
 
-  const isQAPhase = session.status === "qa";
+  const isQAPhase = session.status === "qa" || session.status === "prompt_ready";
 
   return (
     <AppLayout>

@@ -63,6 +63,7 @@ lib/
 - Phase 4 complete: Settings panel (3-tab), per-key API key save, 2-step curl add modal, DynamicParamForm, /api/parse-curl endpoint
 - Phase 5 complete: AI Q&A phase rebuilt, analyze-reference bug fixed, 2-panel QA layout, prompt builder
 - Phase 6 complete: PromptEnhancer rebuilt (2-panel), Regenerate Q&A, Rewrite All confirm dialogs, inline Generate, suggestions panel with Accept/Skip/Accept All
+- Phase 7 complete: GeneratingPanel (pulsing progress, prompt preview, per-image dots), ResultsGallery rebuilt (M1 large/M2 grid, ImageCard with View Full + Download, lightbox, Edit Prompt + Generate Again actions), generation.ts updated (queue polling for async fal models, 3-format image URL extraction, per-image error handling)
 
 ## Phase 5: AI Q&A + Prompt Builder
 
