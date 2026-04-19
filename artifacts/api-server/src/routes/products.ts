@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, count, max } from "drizzle-orm";
+import { eq, count, max, desc } from "drizzle-orm";
 import { db, productsTable, sessionsTable, templatesTable } from "@workspace/db";
 import {
   CreateProductBody,
@@ -16,7 +16,7 @@ const router: IRouter = Router();
 router.use(requireAuth);
 
 router.get("/products", async (req, res): Promise<void> => {
-  const products = await db.select().from(productsTable).orderBy(productsTable.createdAt);
+  const products = await db.select().from(productsTable).orderBy(desc(productsTable.createdAt));
   res.json(products);
 });
 

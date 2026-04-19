@@ -184,12 +184,10 @@ function WizardStep({
   const [similarityLevel, setSimilarityLevel] = useState(session.similarityLevel || 70);
   const [templateInspirationId, setTemplateInspirationId] = useState(session.templateInspirationId || "");
 
-  const { data: templates } = useListTemplates({
-    query: {
-      params: { productId },
-      queryKey: getListTemplatesQueryKey({ productId }),
-    },
-  });
+  const { data: templates } = useListTemplates(
+    { productId },
+    { query: { queryKey: getListTemplatesQueryKey({ productId }) } }
+  );
 
   const analyzeRef = useAnalyzeReferenceImage();
 
@@ -484,7 +482,7 @@ function QAPhase({ session }: { session: Session }) {
     try {
       await submitAnswer.mutateAsync({
         id: sessionId,
-        data: { question: currentQuestion.question, answer, questionIndex },
+        data: { question: currentQuestion.question ?? "", answer, questionIndex },
       });
       setQuestionIndex((i) => i + 1);
       await fetchNextQuestion();
@@ -540,26 +538,26 @@ function QAPhase({ session }: { session: Session }) {
       <h2 className="text-xl font-semibold leading-snug">{currentQuestion!.question}</h2>
 
       <div className="space-y-2">
-        {currentQuestion!.options.map((opt) => (
+        {(currentQuestion!.options ?? []).map((opt) => (
           <button
-            key={opt.value}
-            onClick={() => setSelectedAnswer(opt.value)}
+            key={opt.label}
+            onClick={() => setSelectedAnswer(opt.label)}
             className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 ${
-              selectedAnswer === opt.value
+              selectedAnswer === opt.label
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-primary/30"
             }`}
           >
             <div
               className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                selectedAnswer === opt.value ? "border-primary bg-primary" : "border-muted-foreground"
+                selectedAnswer === opt.label ? "border-primary bg-primary" : "border-muted-foreground"
               }`}
             >
-              {selectedAnswer === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+              {selectedAnswer === opt.label && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
             </div>
             <div className="min-w-0">
               <span className="text-sm font-medium">{opt.label}</span>
-              {opt.isSuggested && (
+              {currentQuestion!.aiSuggestion === opt.label && (
                 <Badge variant="secondary" className="ml-2 text-xs">Suggested</Badge>
               )}
             </div>

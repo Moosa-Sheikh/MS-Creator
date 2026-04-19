@@ -356,7 +356,7 @@ export default function SettingsPage() {
         setFalName("");
       },
       onError: (e) => {
-        toast({ title: "Failed to parse curl command", description: e.error, variant: "destructive" });
+        toast({ title: "Failed to parse curl command", description: (e as any).data?.error, variant: "destructive" });
       },
     },
   });
@@ -372,7 +372,7 @@ export default function SettingsPage() {
         setLlmSystemPrompt("");
       },
       onError: (e) => {
-        toast({ title: "Failed to parse curl command", description: e.error, variant: "destructive" });
+        toast({ title: "Failed to parse curl command", description: (e as any).data?.error, variant: "destructive" });
       },
     },
   });
