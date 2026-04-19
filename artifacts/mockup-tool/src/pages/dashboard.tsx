@@ -7,6 +7,7 @@ import { ProductGrid } from "@/components/products/ProductGrid";
 import { CreateProductModal } from "@/components/products/CreateProductModal";
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog";
 import { ActiveProductBanner } from "@/components/ActiveProductBanner";
+import { WizardModal } from "@/components/wizard/WizardModal";
 import { useActiveProduct } from "@/contexts/ActiveProductContext";
 
 type Product = {
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const handleOpen = (product: Product) => {
     if (activeProduct?.id === product.id) {
@@ -98,7 +100,10 @@ export default function Dashboard() {
         )}
 
         {activeProduct && (
-          <ActiveProductBanner product={activeProduct} />
+          <ActiveProductBanner
+            product={activeProduct}
+            onCreateMockup={() => setWizardOpen(true)}
+          />
         )}
       </div>
 
@@ -120,6 +125,14 @@ export default function Dashboard() {
         product={deleteProduct}
         onDeleted={handleDeleted}
       />
+
+      {activeProduct && (
+        <WizardModal
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          productId={activeProduct.id}
+        />
+      )}
     </AppLayout>
   );
 }

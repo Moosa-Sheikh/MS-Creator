@@ -9,22 +9,16 @@ type Props = {
     description: string | null;
   };
   templateCount?: number;
+  onCreateMockup: () => void;
 };
 
-export function ActiveProductBanner({ product, templateCount = 0 }: Props) {
+export function ActiveProductBanner({ product, templateCount = 0, onCreateMockup }: Props) {
   const { toast } = useToast();
-
-  const handleCreateMockup = () => {
-    toast({
-      title: "Coming soon",
-      description: "Mockup creation setup starts in Phase 3.",
-    });
-  };
 
   const handleViewTemplates = () => {
     toast({
       title: "Coming soon",
-      description: "Template browsing will be available in Phase 8.",
+      description: "Template browsing will be available in a future phase.",
     });
   };
 
@@ -44,7 +38,7 @@ export function ActiveProductBanner({ product, templateCount = 0 }: Props) {
         </div>
       </div>
       <div className="flex items-center gap-3 pl-8">
-        <Button size="sm" onClick={handleCreateMockup}>
+        <Button size="sm" onClick={onCreateMockup}>
           <Palette className="h-4 w-4 mr-2" />
           Create New Mockup
         </Button>
