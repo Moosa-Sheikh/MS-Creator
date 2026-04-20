@@ -34,5 +34,7 @@ export interface UpdateSessionBody {
   /** @nullable */
   status?: string | null;
   /** @nullable */
+  flowId?: string | null;
+  /** @nullable */
   templateInspirationId?: string | null;
 }

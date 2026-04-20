@@ -5,6 +5,7 @@
  * Etsy Mockup Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateSettingsBodyFlowSystemPrompts } from "./updateSettingsBodyFlowSystemPrompts";
 
 export interface UpdateSettingsBody {
   /** @nullable */
@@ -19,4 +20,5 @@ export interface UpdateSettingsBody {
   googleApiKey?: string | null;
   /** @nullable */
   claudeEnabled?: boolean | null;
+  flowSystemPrompts?: UpdateSettingsBodyFlowSystemPrompts;
 }

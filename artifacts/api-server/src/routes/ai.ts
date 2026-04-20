@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, sessionsTable, templatesTable, productsTable } from "@workspace/db";
+import { db, sessionsTable, templatesTable, productsTable, settingsTable } from "@workspace/db";
 import {
   GetNextQuestionParams,
   SubmitAnswerParams,
@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { callActiveLlm, extractJson } from "../lib/llm";
+import { DEFAULT_FLOW_PROMPTS, type FlowId } from "../lib/flows";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -47,41 +48,14 @@ router.post("/sessions/:id/qa/next-question", async (req, res): Promise<void> =>
 TEMPLATE INSPIRATION — User chose to base this session on a saved template:
 Template name: "${template.name}"
 Template's proven prompt: "${template.prompt}"
-${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : ""}
-Build on this template's visual direction. Ask questions to explore if the user wants variations, enhancements, or to try something different. Don't just copy the same answers — invite them to refine or improve.`;
+${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : ""}`;
     }
   }
 
-  const systemPrompt = `You are an expert Etsy product mockup photographer and AI prompt engineer.
-Your job is to ask the seller creative questions to help build a detailed image generation prompt for their product mockup.
-Ask one question at a time with 3-4 multiple choice options plus always include "Other (type your own)" as the last option.
-Always include an AI suggestion explaining what you recommend and why.
-
-Topics to cover (in rough order):
-1. Background/setting and environment
-2. Lighting style (golden hour, studio, natural, etc.)
-3. Overall mood and aesthetic
-4. Photography style (flat lay, lifestyle, close-up, etc.)
-5. Color palette / props
-6. Composition details
-${session.outputType === "M2" ? "7. How the multiple images should vary from each other" : ""}
-
-After 6-8 questions, respond with DONE and build the final prompt.
-
-Return JSON only. Format:
-{
-  "done": false,
-  "question": "...",
-  "options": [{"label": "...", "description": "..."}],
-  "aiSuggestion": "...",
-  "questionIndex": ${questionIndex}
-}
-
-Or when done:
-{
-  "done": true,
-  "finalPrompt": "... detailed AI image generation prompt ..."
-}`;
+  const [settingsRow] = await db.select().from(settingsTable).limit(1);
+  const savedPrompts = (settingsRow?.flowSystemPrompts ?? {}) as Record<string, string>;
+  const flowId = (session.flowId as FlowId | null) ?? "F5";
+  const systemPrompt = savedPrompts[flowId] || DEFAULT_FLOW_PROMPTS[flowId] || DEFAULT_FLOW_PROMPTS["F5"];
 
   const userPrompt = `Product: ${product?.name ?? "Unknown"} — ${product?.description ?? ""}
 Option: ${session.optionType === "B" ? "Option B (reference-based)" : "Option A (from scratch)"}

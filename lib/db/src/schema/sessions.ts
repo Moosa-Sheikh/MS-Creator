@@ -20,6 +20,7 @@ export const sessionsTable = pgTable("sessions", {
   falParams: jsonb("fal_params").notNull().default({}),
   generatedImageUrls: text("generated_image_urls").array().notNull().default([]),
   status: text("status").notNull().default("draft"), // draft | prompt_ready | generating | completed | failed
+  flowId: text("flow_id"), // F1-F6 — computed from optionType + referenceStyle + templateInspirationId
   templateInspirationId: uuid("template_inspiration_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

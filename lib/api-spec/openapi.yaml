@@ -868,7 +868,10 @@ components:
             type: string
         status:
           type: string
-          description: "draft | prompt_ready | generating | completed | failed"
+          description: "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed"
+        flowId:
+          type: ["string", "null"]
+          description: "F1-F6 — determined by optionType + referenceStyle + templateInspirationId"
         templateInspirationId:
           type: ["string", "null"]
         createdAt:
@@ -893,6 +896,7 @@ components:
         - falParams
         - generatedImageUrls
         - status
+        - flowId
         - templateInspirationId
         - createdAt
         - updatedAt
@@ -977,6 +981,8 @@ components:
           items:
             type: string
         status:
+          type: ["string", "null"]
+        flowId:
           type: ["string", "null"]
         templateInspirationId:
           type: ["string", "null"]
@@ -1169,6 +1175,10 @@ components:
           type: boolean
         claudeEnabled:
           type: boolean
+        flowSystemPrompts:
+          type: object
+          additionalProperties:
+            type: string
       required:
         - id
         - falApiKeySet
@@ -1177,6 +1187,7 @@ components:
         - openaiApiKeySet
         - googleApiKeySet
         - claudeEnabled
+        - flowSystemPrompts
 
     UpdateSettingsBody:
       type: object
@@ -1193,6 +1204,10 @@ components:
           type: ["string", "null"]
         claudeEnabled:
           type: ["boolean", "null"]
+        flowSystemPrompts:
+          type: object
+          additionalProperties:
+            type: string
 
     FalModel:
       type: object

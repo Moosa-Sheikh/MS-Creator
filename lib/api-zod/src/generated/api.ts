@@ -150,7 +150,15 @@ export const ListSessionsResponseItem = zod.object({
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
-    .describe("draft | prompt_ready | generating | completed | failed"),
+    .describe(
+      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+    ),
+  flowId: zod
+    .string()
+    .nullable()
+    .describe(
+      "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
+    ),
   templateInspirationId: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -207,7 +215,15 @@ export const GetSessionResponse = zod.object({
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
-    .describe("draft | prompt_ready | generating | completed | failed"),
+    .describe(
+      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+    ),
+  flowId: zod
+    .string()
+    .nullable()
+    .describe(
+      "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
+    ),
   templateInspirationId: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -243,6 +259,7 @@ export const UpdateSessionBody = zod.object({
   falParams: zod.record(zod.string(), zod.unknown()).optional(),
   generatedImageUrls: zod.array(zod.string()).optional(),
   status: zod.string().nullish(),
+  flowId: zod.string().nullish(),
   templateInspirationId: zod.string().nullish(),
 });
 
@@ -274,7 +291,15 @@ export const UpdateSessionResponse = zod.object({
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
-    .describe("draft | prompt_ready | generating | completed | failed"),
+    .describe(
+      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+    ),
+  flowId: zod
+    .string()
+    .nullable()
+    .describe(
+      "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
+    ),
   templateInspirationId: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -366,7 +391,15 @@ export const SubmitAnswerResponse = zod.object({
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
-    .describe("draft | prompt_ready | generating | completed | failed"),
+    .describe(
+      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+    ),
+  flowId: zod
+    .string()
+    .nullable()
+    .describe(
+      "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
+    ),
   templateInspirationId: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -498,6 +531,7 @@ export const GetSettingsResponse = zod.object({
   openaiApiKeySet: zod.boolean(),
   googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
+  flowSystemPrompts: zod.record(zod.string(), zod.string()),
 });
 
 /**
@@ -510,6 +544,7 @@ export const UpdateSettingsBody = zod.object({
   openaiApiKey: zod.string().nullish(),
   googleApiKey: zod.string().nullish(),
   claudeEnabled: zod.boolean().nullish(),
+  flowSystemPrompts: zod.record(zod.string(), zod.string()).optional(),
 });
 
 export const UpdateSettingsResponse = zod.object({
@@ -520,6 +555,7 @@ export const UpdateSettingsResponse = zod.object({
   openaiApiKeySet: zod.boolean(),
   googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
+  flowSystemPrompts: zod.record(zod.string(), zod.string()),
 });
 
 /**

@@ -65,6 +65,8 @@ lib/
 - Phase 6 complete: PromptEnhancer rebuilt (2-panel), Regenerate Q&A, Rewrite All confirm dialogs, inline Generate, suggestions panel with Accept/Skip/Accept All
 - Phase 7 complete: GeneratingPanel (pulsing progress, prompt preview, per-image dots), ResultsGallery rebuilt (M1 large/M2 grid, ImageCard with View Full + Download, lightbox, Edit Prompt + Generate Again actions), generation.ts updated (queue polling for async fal models, 3-format image URL extraction, per-image error handling)
 - Phase 8 complete: Template browser page (/templates/:productId) — grid with M1/M2 filter, card thumbnails, "Use" (opens wizard pre-loaded) + delete w/ confirm, template detail modal (image gallery, prompt copy, Q&A summary); ActiveProductBanner navigates to templates and shows real count (fetches own data); TemplatePicker fixed to handle external fal.io image URLs; WizardModal accepts initialTemplateId prop; AI Q&A enhanced with full template context (name, prompt, Q&A history)
+- Phase 9 complete: Universal 4-provider LLM (OpenRouter/Anthropic/OpenAI/Google) with per-model apiKey override + global fallback; capability flags (supportsVision, supportsThinking, isFree); AddLlmModelDialog with 4 provider presets
+- Phase 10 complete: 6 AI "Flow Brains" — each session now gets a `flowId` (F1–F6) computed from optionType × referenceStyle × templateInspirationId. Flow-specific system prompts stored in settings `flowSystemPrompts` JSONB (merges with built-in defaults). New "Flow Prompts" tab in Settings with 6 editable textareas + Reset to Default. Flow confirmation screen shown before Q&A starts (replaces old analysis-only card). Flow badge in Q&A and Prompt phase left panels.
 
 ## Phase 5: AI Q&A + Prompt Builder
 

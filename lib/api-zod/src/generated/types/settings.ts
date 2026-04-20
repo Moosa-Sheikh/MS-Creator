@@ -5,6 +5,7 @@
  * Etsy Mockup Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { SettingsFlowSystemPrompts } from "./settingsFlowSystemPrompts";
 
 export interface Settings {
   id: string;
@@ -14,4 +15,5 @@ export interface Settings {
   openaiApiKeySet: boolean;
   googleApiKeySet: boolean;
   claudeEnabled: boolean;
+  flowSystemPrompts: SettingsFlowSystemPrompts;
 }

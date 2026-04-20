@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCurlCommand, parseCurlForPreview } from "../lib/curlParser";
+import { DEFAULT_FLOW_PROMPTS } from "../lib/flows";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -37,6 +38,7 @@ function settingsResponse(s: typeof settingsTable.$inferSelect) {
     openaiApiKeySet: !!s.openaiApiKey,
     googleApiKeySet: !!s.googleApiKey,
     claudeEnabled: s.claudeEnabled,
+    flowSystemPrompts: { ...DEFAULT_FLOW_PROMPTS, ...(s.flowSystemPrompts ?? {}) } as Record<string, string>,
   };
 }
 
@@ -58,6 +60,10 @@ router.patch("/settings", async (req, res): Promise<void> => {
   if (parsed.data.openaiApiKey !== undefined) update.openaiApiKey = parsed.data.openaiApiKey || null;
   if (parsed.data.googleApiKey !== undefined) update.googleApiKey = parsed.data.googleApiKey || null;
   if (parsed.data.claudeEnabled !== undefined) update.claudeEnabled = parsed.data.claudeEnabled;
+  if (parsed.data.flowSystemPrompts !== undefined) {
+    const existing = (settings.flowSystemPrompts ?? {}) as Record<string, string>;
+    update.flowSystemPrompts = { ...existing, ...parsed.data.flowSystemPrompts };
+  }
   const [updated] = await db.update(settingsTable).set(update).where(eq(settingsTable.id, settings.id)).returning();
   res.json(settingsResponse(updated));
 });

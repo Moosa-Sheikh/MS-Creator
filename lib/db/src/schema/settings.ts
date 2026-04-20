@@ -1,4 +1,4 @@
-import { pgTable, text, serial, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,6 +10,7 @@ export const settingsTable = pgTable("app_settings", {
   openaiApiKey: text("openai_api_key"),
   googleApiKey: text("google_api_key"),
   claudeEnabled: boolean("claude_enabled").notNull().default(false),
+  flowSystemPrompts: jsonb("flow_system_prompts").$type<Record<string, string>>().default({}),
 });
 
 export const insertSettingsSchema = createInsertSchema(settingsTable).omit({ id: true });

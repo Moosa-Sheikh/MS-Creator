@@ -100,8 +100,13 @@ export interface Session {
   falModelId: string | null;
   falParams: SessionFalParams;
   generatedImageUrls: string[];
-  /** draft | prompt_ready | generating | completed | failed */
+  /** draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed */
   status: string;
+  /**
+   * F1-F6 — determined by optionType + referenceStyle + templateInspirationId
+   * @nullable
+   */
+  flowId: string | null;
   /** @nullable */
   templateInspirationId: string | null;
   createdAt: string;
@@ -152,6 +157,8 @@ export interface UpdateSessionBody {
   generatedImageUrls?: string[];
   /** @nullable */
   status?: string | null;
+  /** @nullable */
+  flowId?: string | null;
   /** @nullable */
   templateInspirationId?: string | null;
 }
@@ -241,6 +248,8 @@ export interface CreateTemplateBody {
   name: string;
 }
 
+export type SettingsFlowSystemPrompts = { [key: string]: string };
+
 export interface Settings {
   id: string;
   falApiKeySet: boolean;
@@ -249,7 +258,10 @@ export interface Settings {
   openaiApiKeySet: boolean;
   googleApiKeySet: boolean;
   claudeEnabled: boolean;
+  flowSystemPrompts: SettingsFlowSystemPrompts;
 }
+
+export type UpdateSettingsBodyFlowSystemPrompts = { [key: string]: string };
 
 export interface UpdateSettingsBody {
   /** @nullable */
@@ -264,6 +276,7 @@ export interface UpdateSettingsBody {
   googleApiKey?: string | null;
   /** @nullable */
   claudeEnabled?: boolean | null;
+  flowSystemPrompts?: UpdateSettingsBodyFlowSystemPrompts;
 }
 
 export type FalModelParamsSchema = { [key: string]: unknown };

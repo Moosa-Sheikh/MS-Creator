@@ -50,8 +50,13 @@ export interface Session {
   falModelId: string | null;
   falParams: SessionFalParams;
   generatedImageUrls: string[];
-  /** draft | prompt_ready | generating | completed | failed */
+  /** draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed */
   status: string;
+  /**
+   * F1-F6 — determined by optionType + referenceStyle + templateInspirationId
+   * @nullable
+   */
+  flowId: string | null;
   /** @nullable */
   templateInspirationId: string | null;
   createdAt: string;

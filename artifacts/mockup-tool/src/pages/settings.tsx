@@ -39,6 +39,9 @@ import {
   Key,
   Eye,
   EyeOff,
+  GitBranch,
+  RotateCcw,
+  Save,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -54,6 +57,7 @@ import {
 import type { FalModel, LlmConfig } from "@workspace/api-client-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddModelModal, type EditModelData } from "@/components/settings/AddModelModal";
+import { Textarea } from "@/components/ui/textarea";
 
 // ── Provider definitions ──────────────────────────────────────────────────────
 
@@ -712,6 +716,151 @@ function ApiKeysTab() {
   );
 }
 
+// ── Flow Prompts Tab ──────────────────────────────────────────────────────────
+
+const FLOW_META: Array<{
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+  path: string[];
+  color: string;
+}> = [
+  { id: "F1", name: "Reference → New Idea → Fresh Start", shortName: "New Idea", description: "Reference as inspiration only — create a fully original concept.", path: ["Option B", "IDEA", "No Template"], color: "violet" },
+  { id: "F2", name: "Reference → New Idea → Template Inspired", shortName: "New Idea + Template", description: "Reference as inspiration, template as structural guide.", path: ["Option B", "IDEA", "With Template"], color: "purple" },
+  { id: "F3", name: "Reference → Same Style → Fresh Start", shortName: "Replicate Style", description: "Closely replicate the reference style for your product.", path: ["Option B", "SAME", "No Template"], color: "blue" },
+  { id: "F4", name: "Reference → Same Style → Template Inspired", shortName: "Replicate + Template", description: "Match reference closely, guided by template formula.", path: ["Option B", "SAME", "With Template"], color: "cyan" },
+  { id: "F5", name: "AI Generated → Fresh Start", shortName: "Pure AI", description: "No reference — AI builds the concept from scratch.", path: ["Option A", "No Template"], color: "emerald" },
+  { id: "F6", name: "AI Generated → Template Inspired", shortName: "AI + Template", description: "AI-generated concept evolved from a saved template.", path: ["Option A", "With Template"], color: "amber" },
+];
+
+const FLOW_COLOR_CLASSES: Record<string, string> = {
+  violet: "bg-violet-500/10 text-violet-500 border-violet-500/20",
+  purple: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  blue: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  cyan: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
+  emerald: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  amber: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+};
+
+function FlowPromptsTab() {
+  const { data: settings } = useGetSettings();
+  const { mutateAsync: updateSettings } = useUpdateSettings();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const getPromptValue = (flowId: string) => {
+    if (drafts[flowId] !== undefined) return drafts[flowId];
+    return (settings?.flowSystemPrompts as Record<string, string> | undefined)?.[flowId] ?? "";
+  };
+
+  const handleSave = async (flowId: string) => {
+    const value = getPromptValue(flowId);
+    setSaving(flowId);
+    try {
+      await updateSettings({ data: { flowSystemPrompts: { [flowId]: value } } });
+      await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      setDrafts((prev) => { const n = { ...prev }; delete n[flowId]; return n; });
+      toast({ title: "Saved", description: `Flow ${flowId} prompt saved.` });
+    } catch {
+      toast({ title: "Error", description: "Failed to save prompt.", variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const handleReset = async (flowId: string) => {
+    setSaving(flowId);
+    try {
+      await updateSettings({ data: { flowSystemPrompts: { [flowId]: "" } } });
+      await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      setDrafts((prev) => { const n = { ...prev }; delete n[flowId]; return n; });
+      toast({ title: "Reset", description: `Flow ${flowId} prompt reset to default.` });
+    } catch {
+      toast({ title: "Error", description: "Failed to reset prompt.", variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-muted/40 border border-border/60 rounded-xl p-4">
+        <p className="text-sm text-muted-foreground">
+          Each of the 6 session flows has its own AI system prompt that controls how the Q&amp;A conversation is conducted.
+          Edit each prompt to customise the AI's personality, focus areas, and question style for that flow.
+          Saving an empty prompt restores the built-in default.
+        </p>
+      </div>
+
+      {FLOW_META.map((flow) => {
+        const value = getPromptValue(flow.id);
+        const serverValue = (settings?.flowSystemPrompts as Record<string, string> | undefined)?.[flow.id] ?? "";
+        const isDirty = drafts[flow.id] !== undefined && drafts[flow.id] !== serverValue;
+        const colorClass = FLOW_COLOR_CLASSES[flow.color] ?? FLOW_COLOR_CLASSES.blue;
+
+        return (
+          <div key={flow.id} className="bg-card border border-border/60 rounded-xl overflow-hidden">
+            <div className="flex items-start gap-3 p-4 border-b border-border/40">
+              <div className={`inline-flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold border ${colorClass} shrink-0`}>
+                {flow.id}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold">{flow.name}</p>
+                  {isDirty && <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/40">Unsaved</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{flow.description}</p>
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                  {flow.path.map((part, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      {i > 0 && <span className="text-muted-foreground text-xs">→</span>}
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{part}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-3">
+              <Textarea
+                value={value}
+                onChange={(e) => setDrafts((prev) => ({ ...prev, [flow.id]: e.target.value }))}
+                rows={10}
+                className="font-mono text-xs resize-y"
+                placeholder="Leave empty to use built-in default prompt…"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void handleReset(flow.id)}
+                  disabled={saving === flow.id}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset to Default
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void handleSave(flow.id)}
+                  disabled={saving === flow.id || !isDirty}
+                >
+                  {saving === flow.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -737,6 +886,10 @@ export default function SettingsPage() {
               <Key className="w-3.5 h-3.5" />
               API Keys
             </TabsTrigger>
+            <TabsTrigger value="flows" className="gap-2">
+              <GitBranch className="w-3.5 h-3.5" />
+              Flow Prompts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="llm">
@@ -749,6 +902,10 @@ export default function SettingsPage() {
 
           <TabsContent value="keys">
             <ApiKeysTab />
+          </TabsContent>
+
+          <TabsContent value="flows">
+            <FlowPromptsTab />
           </TabsContent>
         </Tabs>
       </div>
