@@ -11,7 +11,7 @@ import {
   RewritePromptParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { callActiveLlm } from "../lib/llm";
+import { callActiveLlm, extractJson } from "../lib/llm";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -95,10 +95,11 @@ ${qaAnswers.map((a) => `Q: ${a.question}\nA: ${a.answer}`).join("\n\n")}
 ${questionIndex >= 6 ? "You may now generate the final prompt if you have enough info, or ask one more targeted question." : `Ask question #${questionIndex + 1}.`}`;
 
   try {
-    const rawResponse = await callActiveLlm([{ role: "user", content: userPrompt }]);
-    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in LLM response");
-    const parsed = JSON.parse(jsonMatch[0]) as {
+    const rawResponse = await callActiveLlm([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ]);
+    const parsed = JSON.parse(extractJson(rawResponse)) as {
       done: boolean;
       question?: string;
       options?: Array<{ label: string; description: string }>;
@@ -191,9 +192,7 @@ Only include 3-6 most impactful suggestions. Return [] if the prompt is already 
       },
     ]);
 
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-    const parsed = JSON.parse(jsonMatch[0]) as { suggestions: Array<{ original: string; replacement: string; reason: string }> };
+    const parsed = JSON.parse(extractJson(response)) as { suggestions: Array<{ original: string; replacement: string; reason: string }> };
     res.json(parsed);
   } catch (err: unknown) {
     req.log.error({ err }, "Enhance prompt error");
@@ -238,9 +237,7 @@ Revise ONLY the relevant part of the prompt based on the instruction. Keep every
 Return JSON: { "prompt": "..." }`,
       },
     ]);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-    const result = JSON.parse(jsonMatch[0]) as { prompt: string };
+    const result = JSON.parse(extractJson(response)) as { prompt: string };
     res.json(result);
   } catch (err: unknown) {
     req.log.error({ err }, "Revise prompt error");
@@ -283,9 +280,7 @@ Write a comprehensive, highly visual prompt that an AI image model can use to ge
 Return JSON: { "prompt": "..." }`,
       },
     ]);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-    const result = JSON.parse(jsonMatch[0]) as { prompt: string };
+    const result = JSON.parse(extractJson(response)) as { prompt: string };
     res.json(result);
   } catch (err: unknown) {
     req.log.error({ err }, "Rewrite prompt error");

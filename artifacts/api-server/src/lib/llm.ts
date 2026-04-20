@@ -117,6 +117,21 @@ async function callGoogle(messages: LlmMessage[], config: LlmConfig, settings: S
   return res.response.text();
 }
 
+/**
+ * Strips <thinking> blocks (extended thinking models like claude-3.7-sonnet:thinking)
+ * and markdown code fences, then extracts the first JSON object from the response.
+ * Throws if no valid JSON object is found.
+ */
+export function extractJson(text: string): string {
+  const cleaned = text
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    .replace(/```(?:json)?\s*([\s\S]*?)```/gi, "$1")
+    .trim();
+  const match = cleaned.match(/\{[\s\S]*\}/) ?? text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON in LLM response");
+  return match[0];
+}
+
 export async function callActiveLlm(messages: LlmMessage[]): Promise<string> {
   const [activeConfig] = await db
     .select()

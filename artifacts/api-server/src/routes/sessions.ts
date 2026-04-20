@@ -11,7 +11,7 @@ import {
   AnalyzeReferenceImageParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { callActiveLlm } from "../lib/llm";
+import { callActiveLlm, extractJson } from "../lib/llm";
 import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
@@ -175,8 +175,7 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
     // Parse JSON — fall back to storing raw text if parsing fails
     let analysisData: Record<string, string>;
     try {
-      const jsonMatch = rawAnalysis.match(/\{[\s\S]*\}/);
-      analysisData = jsonMatch ? JSON.parse(jsonMatch[0]) : { additional_notes: rawAnalysis };
+      analysisData = JSON.parse(extractJson(rawAnalysis));
     } catch {
       analysisData = { additional_notes: rawAnalysis };
     }
