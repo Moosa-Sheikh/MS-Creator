@@ -85,6 +85,16 @@ lib/
 - **GenerationPanel**: select fal.io model + dynamic params → trigger generation
 - **ResultsGallery**: image grid with download + fullscreen + save-as-template
 
+## Phase 11 Fixes (Image Analysis + Q&A Quality)
+- `sharp` added to `onlyBuiltDependencies` in `pnpm-workspace.yaml` — native binaries now build correctly
+- **Image resize before analysis**: `sessions.ts` analyze-reference route now resizes uploaded image to max 1024×1024 JPEG (quality 82) using sharp before base64-encoding for LLM — fixes "prompt is too long: 216298 tokens" error
+- **Q&A completely rewritten** — all 6 flow system prompts in `lib/flows.ts` now instruct the AI to:
+  - Parse and USE the reference analysis as a spec, not re-ask what's already known
+  - Ask product-specific, concrete questions (not generic "what background do you want?")
+  - Frame options in context of reference details ("The reference shows X — keep it or try Y?")
+  - Focus only on gaps/decisions not already answered by the reference
+- **User message restructured** in `ai.ts` — reference analysis now formatted as labeled sections (Background / Setting, Lighting, Placement, Props, Mood, Photography Style) rather than raw JSON string; includes similarity level interpretation and clear INSTRUCTION directive
+
 ## Key Files (Phase 5)
 
 - `artifacts/mockup-tool/src/pages/session.tsx` — QAPhase (2-panel), PromptEnhancer, GenerationPanel, ResultsGallery, WizardStep, SessionPage

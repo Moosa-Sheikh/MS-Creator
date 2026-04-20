@@ -13,6 +13,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { callActiveLlm, extractJson } from "../lib/llm";
 import { ObjectStorageService } from "../lib/objectStorage";
+import sharp from "sharp";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -156,11 +157,14 @@ router.post("/sessions/:id/analyze-reference", async (req, res): Promise<void> =
     let imageContent: { type: string; image_url?: { url: string }; text?: string };
     try {
       const file = await storageService.getObjectEntityFile(session.referenceImageUrl);
-      const [metadata] = await file.getMetadata();
       const [buffer] = await file.download();
-      const mimeType = (metadata.contentType as string) || "image/jpeg";
-      const base64 = buffer.toString("base64");
-      imageContent = { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } };
+      // Resize to max 1024px on longest side to stay well within token limits
+      const resized = await sharp(buffer)
+        .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      const base64 = resized.toString("base64");
+      imageContent = { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } };
     } catch {
       imageContent = { type: "image_url", image_url: { url: session.referenceImageUrl } };
     }

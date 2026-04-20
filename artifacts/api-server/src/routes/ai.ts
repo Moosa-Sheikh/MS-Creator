@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { callActiveLlm, extractJson } from "../lib/llm";
-import { DEFAULT_FLOW_PROMPTS, type FlowId } from "../lib/flows";
+import { DEFAULT_FLOW_PROMPTS, FLOWS, type FlowId } from "../lib/flows";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -57,16 +57,46 @@ ${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : "
   const flowId = (session.flowId as FlowId | null) ?? "F5";
   const systemPrompt = savedPrompts[flowId] || DEFAULT_FLOW_PROMPTS[flowId] || DEFAULT_FLOW_PROMPTS["F5"];
 
-  const userPrompt = `Product: ${product?.name ?? "Unknown"} — ${product?.description ?? ""}
-Option: ${session.optionType === "B" ? "Option B (reference-based)" : "Option A (from scratch)"}
-Output: ${session.outputType}${session.outputType === "M2" ? ` (${session.imageCount} images)` : ""}
-${session.referenceStyle ? `Reference style: ${session.referenceStyle}` : ""}
-${session.referenceAnalysis ? `Reference image analysis: ${session.referenceAnalysis}` : ""}
-${templateContext}
-Questions answered so far (${questionIndex}):
-${qaAnswers.map((a) => `Q: ${a.question}\nA: ${a.answer}`).join("\n\n")}
+  // Format reference analysis as readable sections (not raw JSON string)
+  let referenceSection = "";
+  if (session.referenceAnalysis) {
+    try {
+      const ra = JSON.parse(session.referenceAnalysis) as Record<string, string>;
+      const labelMap: Record<string, string> = {
+        background: "Background / Setting",
+        lighting: "Lighting",
+        placement: "Product Placement & Composition",
+        props: "Props & Accessories",
+        mood: "Mood & Aesthetic",
+        photography_style: "Photography Style",
+        additional_notes: "Additional Notes",
+      };
+      const lines = Object.entries(ra)
+        .filter(([, v]) => v && v.trim())
+        .map(([k, v]) => `  • ${labelMap[k] ?? k}: ${v}`);
+      if (lines.length > 0) {
+        referenceSection = `\n━━━ REFERENCE IMAGE ANALYSIS (USE THIS AS SPECIFICATION) ━━━\n${lines.join("\n")}`;
+        if (session.similarityLevel != null) {
+          referenceSection += `\n  • Similarity target: ${session.similarityLevel}/100 (${session.similarityLevel >= 70 ? "high fidelity — replicate closely" : session.similarityLevel >= 40 ? "moderate — adapt meaningfully" : "loose — use as broad inspiration"})`;
+        }
+      }
+    } catch {
+      referenceSection = `\nReference image analysis: ${session.referenceAnalysis}`;
+    }
+  }
 
-${questionIndex >= 6 ? "You may now generate the final prompt if you have enough info, or ask one more targeted question." : `Ask question #${questionIndex + 1}.`}`;
+  const userPrompt = `━━━ PRODUCT ━━━
+Name: ${product?.name ?? "Unknown"}
+Description: ${product?.description ?? "(no description provided)"}
+Flow: ${flowId} — ${FLOWS[flowId]?.name ?? flowId}
+Output: ${session.outputType}${session.outputType === "M2" ? ` (${session.imageCount} images — plan variation across them)` : ""}
+${session.referenceStyle ? `Reference style: ${session.referenceStyle}` : ""}${referenceSection}
+${templateContext ? `\n━━━ TEMPLATE CONTEXT ━━━\n${templateContext}` : ""}
+━━━ Q&A HISTORY (${questionIndex} questions so far) ━━━
+${questionIndex === 0 ? "(No questions asked yet — this is the first question)" : qaAnswers.map((a, i) => `Q${i + 1}: ${a.question}\nA${i + 1}: ${a.answer}`).join("\n\n")}
+
+━━━ INSTRUCTION ━━━
+${questionIndex >= 6 ? "You have gathered substantial information. Generate the final prompt now if you have enough clarity, or ask one last targeted question about a gap that remains." : `Ask question #${questionIndex + 1}. Use the reference analysis and product context above to make this question SPECIFIC to this product and situation — not generic.`}`;
 
   try {
     const rawResponse = await callActiveLlm([
