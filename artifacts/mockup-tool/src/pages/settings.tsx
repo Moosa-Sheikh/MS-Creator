@@ -682,6 +682,16 @@ function ApiKeysTab() {
   const queryClient = useQueryClient();
   const { data: settings } = useGetSettings();
   const [saving, setSaving] = useState(false);
+  const [pollingTimeout, setPollingTimeout] = useState<number | "">(
+    settings?.falPollingTimeoutSecs ?? 60
+  );
+  const [savingTimeout, setSavingTimeout] = useState(false);
+
+  // Sync pollingTimeout when settings load
+  const settingsTimeout = settings?.falPollingTimeoutSecs;
+  if (settingsTimeout != null && pollingTimeout === "") {
+    setPollingTimeout(settingsTimeout);
+  }
 
   const updateSettings = useUpdateSettings({
     mutation: {
@@ -699,6 +709,19 @@ function ApiKeysTab() {
     }
   }
 
+  async function savePollingTimeout() {
+    const val = typeof pollingTimeout === "number" ? pollingTimeout : 60;
+    const clamped = Math.max(30, Math.min(600, val));
+    setSavingTimeout(true);
+    try {
+      await updateSettings.mutateAsync({ data: { falPollingTimeoutSecs: clamped } });
+      setPollingTimeout(clamped);
+      toast({ title: "Polling timeout saved" });
+    } finally {
+      setSavingTimeout(false);
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-xl">
       <div className="bg-card border border-border/60 rounded-xl p-4">
@@ -711,6 +734,34 @@ function ApiKeysTab() {
           isSaving={saving}
           placeholder="fal-..."
         />
+        <div className="mt-4 pt-4 border-t border-border/40">
+          <label className="text-xs font-medium text-foreground block mb-1">
+            Generation Polling Timeout
+          </label>
+          <p className="text-xs text-muted-foreground mb-3">
+            How long to wait for fal.io to finish generating images (30–600 seconds).
+            Increase this if you see timeout errors.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={30}
+              max={600}
+              step={10}
+              value={pollingTimeout}
+              onChange={(e) => setPollingTimeout(e.target.value === "" ? "" : Number(e.target.value))}
+              className="w-24 px-3 py-1.5 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <span className="text-xs text-muted-foreground">seconds</span>
+            <button
+              onClick={() => void savePollingTimeout()}
+              disabled={savingTimeout}
+              className="ml-auto px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {savingTimeout ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

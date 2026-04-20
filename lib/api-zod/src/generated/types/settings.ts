@@ -16,4 +16,6 @@ export interface Settings {
   googleApiKeySet: boolean;
   claudeEnabled: boolean;
   flowSystemPrompts: SettingsFlowSystemPrompts;
+  /** How long to poll fal.io for results (seconds). Default: 60. */
+  falPollingTimeoutSecs?: number;
 }

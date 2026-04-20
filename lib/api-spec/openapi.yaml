@@ -1179,6 +1179,9 @@ components:
           type: object
           additionalProperties:
             type: string
+        falPollingTimeoutSecs:
+          type: integer
+          description: "How long to poll fal.io for results (seconds). Default: 60."
       required:
         - id
         - falApiKeySet
@@ -1208,6 +1211,9 @@ components:
           type: object
           additionalProperties:
             type: string
+        falPollingTimeoutSecs:
+          type: ["integer", "null"]
+          description: "Polling timeout in seconds (30–600)"
 
     FalModel:
       type: object

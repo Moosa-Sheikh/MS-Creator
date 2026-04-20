@@ -532,6 +532,10 @@ export const GetSettingsResponse = zod.object({
   googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
   flowSystemPrompts: zod.record(zod.string(), zod.string()),
+  falPollingTimeoutSecs: zod
+    .number()
+    .optional()
+    .describe("How long to poll fal.io for results (seconds). Default: 60."),
 });
 
 /**
@@ -545,6 +549,10 @@ export const UpdateSettingsBody = zod.object({
   googleApiKey: zod.string().nullish(),
   claudeEnabled: zod.boolean().nullish(),
   flowSystemPrompts: zod.record(zod.string(), zod.string()).optional(),
+  falPollingTimeoutSecs: zod
+    .number()
+    .nullish()
+    .describe("Polling timeout in seconds (30–600)"),
 });
 
 export const UpdateSettingsResponse = zod.object({
@@ -556,6 +564,10 @@ export const UpdateSettingsResponse = zod.object({
   googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
   flowSystemPrompts: zod.record(zod.string(), zod.string()),
+  falPollingTimeoutSecs: zod
+    .number()
+    .optional()
+    .describe("How long to poll fal.io for results (seconds). Default: 60."),
 });
 
 /**

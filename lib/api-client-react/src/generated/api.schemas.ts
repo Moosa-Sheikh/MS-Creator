@@ -259,6 +259,8 @@ export interface Settings {
   googleApiKeySet: boolean;
   claudeEnabled: boolean;
   flowSystemPrompts: SettingsFlowSystemPrompts;
+  /** How long to poll fal.io for results (seconds). Default: 60. */
+  falPollingTimeoutSecs?: number;
 }
 
 export type UpdateSettingsBodyFlowSystemPrompts = { [key: string]: string };
@@ -277,6 +279,11 @@ export interface UpdateSettingsBody {
   /** @nullable */
   claudeEnabled?: boolean | null;
   flowSystemPrompts?: UpdateSettingsBodyFlowSystemPrompts;
+  /**
+   * Polling timeout in seconds (30–600)
+   * @nullable
+   */
+  falPollingTimeoutSecs?: number | null;
 }
 
 export type FalModelParamsSchema = { [key: string]: unknown };

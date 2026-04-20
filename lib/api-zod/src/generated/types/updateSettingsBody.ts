@@ -21,4 +21,9 @@ export interface UpdateSettingsBody {
   /** @nullable */
   claudeEnabled?: boolean | null;
   flowSystemPrompts?: UpdateSettingsBodyFlowSystemPrompts;
+  /**
+   * Polling timeout in seconds (30–600)
+   * @nullable
+   */
+  falPollingTimeoutSecs?: number | null;
 }

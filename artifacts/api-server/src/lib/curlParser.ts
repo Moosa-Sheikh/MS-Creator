@@ -31,7 +31,7 @@ export type ParseCurlPreview = {
   modelId?: string;
 };
 
-const AUTO_FILLED_KEYS = new Set(["prompt", "image_url"]);
+const AUTO_FILLED_KEYS = new Set(["prompt", "image_url", "image_urls"]);
 
 function inferType(value: unknown): "string" | "number" | "boolean" | "integer" {
   if (typeof value === "boolean") return "boolean";

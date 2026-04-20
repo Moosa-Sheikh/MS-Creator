@@ -39,6 +39,7 @@ function settingsResponse(s: typeof settingsTable.$inferSelect) {
     googleApiKeySet: !!s.googleApiKey,
     claudeEnabled: s.claudeEnabled,
     flowSystemPrompts: { ...DEFAULT_FLOW_PROMPTS, ...(s.flowSystemPrompts ?? {}) } as Record<string, string>,
+    falPollingTimeoutSecs: s.falPollingTimeoutSecs ?? 60,
   };
 }
 
@@ -63,6 +64,9 @@ router.patch("/settings", async (req, res): Promise<void> => {
   if (parsed.data.flowSystemPrompts !== undefined) {
     const existing = (settings.flowSystemPrompts ?? {}) as Record<string, string>;
     update.flowSystemPrompts = { ...existing, ...parsed.data.flowSystemPrompts };
+  }
+  if (parsed.data.falPollingTimeoutSecs !== undefined && parsed.data.falPollingTimeoutSecs !== null) {
+    update.falPollingTimeoutSecs = Math.max(30, Math.min(600, parsed.data.falPollingTimeoutSecs));
   }
   const [updated] = await db.update(settingsTable).set(update).where(eq(settingsTable.id, settings.id)).returning();
   res.json(settingsResponse(updated));
