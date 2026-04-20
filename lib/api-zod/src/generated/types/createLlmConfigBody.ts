@@ -8,7 +8,9 @@
 
 export interface CreateLlmConfigBody {
   name: string;
-  curlCommand: string;
+  /** openrouter | anthropic | openai | google */
+  provider: string;
+  modelId: string;
   /** @nullable */
   systemPrompt?: string | null;
 }

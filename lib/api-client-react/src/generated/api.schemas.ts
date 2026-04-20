@@ -246,6 +246,8 @@ export interface Settings {
   falApiKeySet: boolean;
   openrouterApiKeySet: boolean;
   claudeApiKeySet: boolean;
+  openaiApiKeySet: boolean;
+  googleApiKeySet: boolean;
   claudeEnabled: boolean;
 }
 
@@ -256,6 +258,10 @@ export interface UpdateSettingsBody {
   openrouterApiKey?: string | null;
   /** @nullable */
   claudeApiKey?: string | null;
+  /** @nullable */
+  openaiApiKey?: string | null;
+  /** @nullable */
+  googleApiKey?: string | null;
   /** @nullable */
   claudeEnabled?: boolean | null;
 }
@@ -294,13 +300,15 @@ export type LlmConfigDefaultValues = { [key: string]: unknown };
 export interface LlmConfig {
   id: string;
   name: string;
-  /** openrouter or claude */
+  /** openrouter | anthropic | openai | google */
   provider: string;
   modelId: string;
-  endpoint: string;
+  /** @nullable */
+  endpoint: string | null;
   /** @nullable */
   systemPrompt: string | null;
-  curlCommand: string;
+  /** @nullable */
+  curlCommand: string | null;
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
   isActive: boolean;
@@ -309,7 +317,9 @@ export interface LlmConfig {
 
 export interface CreateLlmConfigBody {
   name: string;
-  curlCommand: string;
+  /** openrouter | anthropic | openai | google */
+  provider: string;
+  modelId: string;
   /** @nullable */
   systemPrompt?: string | null;
 }

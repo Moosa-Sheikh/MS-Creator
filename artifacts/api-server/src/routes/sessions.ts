@@ -167,7 +167,7 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
   "additional_notes": "any other notable visual characteristics worth capturing"
 }`,
           },
-          imageContent as Record<string, unknown>,
+          imageContent as { type: string; [key: string]: unknown },
         ],
       },
     ]);

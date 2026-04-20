@@ -495,6 +495,8 @@ export const GetSettingsResponse = zod.object({
   falApiKeySet: zod.boolean(),
   openrouterApiKeySet: zod.boolean(),
   claudeApiKeySet: zod.boolean(),
+  openaiApiKeySet: zod.boolean(),
+  googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
 });
 
@@ -505,6 +507,8 @@ export const UpdateSettingsBody = zod.object({
   falApiKey: zod.string().nullish(),
   openrouterApiKey: zod.string().nullish(),
   claudeApiKey: zod.string().nullish(),
+  openaiApiKey: zod.string().nullish(),
+  googleApiKey: zod.string().nullish(),
   claudeEnabled: zod.boolean().nullish(),
 });
 
@@ -513,6 +517,8 @@ export const UpdateSettingsResponse = zod.object({
   falApiKeySet: zod.boolean(),
   openrouterApiKeySet: zod.boolean(),
   claudeApiKeySet: zod.boolean(),
+  openaiApiKeySet: zod.boolean(),
+  googleApiKeySet: zod.boolean(),
   claudeEnabled: zod.boolean(),
 });
 
@@ -574,11 +580,11 @@ export const DeleteFalModelParams = zod.object({
 export const ListLlmConfigsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
-  provider: zod.string().describe("openrouter or claude"),
+  provider: zod.string().describe("openrouter | anthropic | openai | google"),
   modelId: zod.string(),
-  endpoint: zod.string(),
+  endpoint: zod.string().nullable(),
   systemPrompt: zod.string().nullable(),
-  curlCommand: zod.string(),
+  curlCommand: zod.string().nullable(),
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),
@@ -591,7 +597,8 @@ export const ListLlmConfigsResponse = zod.array(ListLlmConfigsResponseItem);
  */
 export const CreateLlmConfigBody = zod.object({
   name: zod.string(),
-  curlCommand: zod.string(),
+  provider: zod.string().describe("openrouter | anthropic | openai | google"),
+  modelId: zod.string(),
   systemPrompt: zod.string().nullish(),
 });
 
@@ -613,11 +620,11 @@ export const UpdateLlmConfigBody = zod.object({
 export const UpdateLlmConfigResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
-  provider: zod.string().describe("openrouter or claude"),
+  provider: zod.string().describe("openrouter | anthropic | openai | google"),
   modelId: zod.string(),
-  endpoint: zod.string(),
+  endpoint: zod.string().nullable(),
   systemPrompt: zod.string().nullable(),
-  curlCommand: zod.string(),
+  curlCommand: zod.string().nullable(),
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),
@@ -641,11 +648,11 @@ export const ActivateLlmConfigParams = zod.object({
 export const ActivateLlmConfigResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
-  provider: zod.string().describe("openrouter or claude"),
+  provider: zod.string().describe("openrouter | anthropic | openai | google"),
   modelId: zod.string(),
-  endpoint: zod.string(),
+  endpoint: zod.string().nullable(),
   systemPrompt: zod.string().nullable(),
-  curlCommand: zod.string(),
+  curlCommand: zod.string().nullable(),
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),

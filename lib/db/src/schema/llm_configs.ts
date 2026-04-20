@@ -5,11 +5,11 @@ import { z } from "zod/v4";
 export const llmConfigsTable = pgTable("llm_configs", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  provider: text("provider").notNull(), // "openrouter" or "claude"
+  provider: text("provider").notNull(), // "openrouter" | "anthropic" | "openai" | "google"
   modelId: text("model_id").notNull(),
-  endpoint: text("endpoint").notNull(),
+  endpoint: text("endpoint"),
   systemPrompt: text("system_prompt"),
-  curlCommand: text("curl_command").notNull(),
+  curlCommand: text("curl_command"),
   paramsSchema: jsonb("params_schema").notNull().default({}),
   defaultValues: jsonb("default_values").notNull().default({}),
   isActive: boolean("is_active").notNull().default(false),

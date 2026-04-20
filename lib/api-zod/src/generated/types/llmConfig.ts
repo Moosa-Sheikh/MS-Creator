@@ -11,13 +11,15 @@ import type { LlmConfigParamsSchema } from "./llmConfigParamsSchema";
 export interface LlmConfig {
   id: string;
   name: string;
-  /** openrouter or claude */
+  /** openrouter | anthropic | openai | google */
   provider: string;
   modelId: string;
-  endpoint: string;
+  /** @nullable */
+  endpoint: string | null;
   /** @nullable */
   systemPrompt: string | null;
-  curlCommand: string;
+  /** @nullable */
+  curlCommand: string | null;
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
   isActive: boolean;

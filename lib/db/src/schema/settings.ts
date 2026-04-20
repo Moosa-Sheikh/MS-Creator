@@ -7,6 +7,8 @@ export const settingsTable = pgTable("app_settings", {
   falApiKey: text("fal_api_key"),
   openrouterApiKey: text("openrouter_api_key"),
   claudeApiKey: text("claude_api_key"),
+  openaiApiKey: text("openai_api_key"),
+  googleApiKey: text("google_api_key"),
   claudeEnabled: boolean("claude_enabled").notNull().default(false),
 });
 

@@ -1,11 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -15,7 +21,6 @@ import {
   useDeleteFalModel,
   useListLlmConfigs,
   useCreateLlmConfig,
-  useUpdateLlmConfig,
   useDeleteLlmConfig,
   useActivateLlmConfig,
   getGetSettingsQueryKey,
@@ -34,7 +39,6 @@ import {
   Key,
   Eye,
   EyeOff,
-  Pencil,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -50,157 +54,430 @@ import {
 import type { FalModel, LlmConfig } from "@workspace/api-client-react";
 import { AddModelModal, type EditModelData } from "@/components/settings/AddModelModal";
 
+// ── Provider definitions ──────────────────────────────────────────────────────
+
+const PROVIDERS = [
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    description: "One API key, hundreds of models — free and paid. Browse models at openrouter.ai/models",
+    keyLabel: "openrouterApiKey" as const,
+    keySetField: "openrouterApiKeySet" as const,
+    keyPlaceholder: "sk-or-v1-...",
+    modelIdPlaceholder: "openai/gpt-4o",
+    quickModels: [] as { id: string; name: string }[],
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic (Claude)",
+    description: "Best for complex reasoning and creative writing. Extended thinking on claude-3-7-sonnet.",
+    keyLabel: "claudeApiKey" as const,
+    keySetField: "claudeApiKeySet" as const,
+    keyPlaceholder: "sk-ant-...",
+    modelIdPlaceholder: "claude-sonnet-4-6",
+    quickModels: [
+      { id: "claude-opus-4-5", name: "Claude Opus 4.5" },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+    ],
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    description: "Industry-standard GPT and reasoning models. Reliable and widely compatible.",
+    keyLabel: "openaiApiKey" as const,
+    keySetField: "openaiApiKeySet" as const,
+    keyPlaceholder: "sk-proj-...",
+    modelIdPlaceholder: "gpt-4o",
+    quickModels: [
+      { id: "gpt-4o", name: "GPT-4o" },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+      { id: "o4-mini", name: "o4-mini" },
+    ],
+  },
+  {
+    id: "google",
+    name: "Google Gemini",
+    description: "Multimodal models from Google DeepMind. Get your key at aistudio.google.com",
+    keyLabel: "googleApiKey" as const,
+    keySetField: "googleApiKeySet" as const,
+    keyPlaceholder: "AIza...",
+    modelIdPlaceholder: "gemini-2.0-flash",
+    quickModels: [
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
+      { id: "gemini-2.5-pro-preview-03-25", name: "Gemini 2.5 Pro" },
+    ],
+  },
+] as const;
+
+// ── Shared components ─────────────────────────────────────────────────────────
+
 function ApiKeyField({
   label,
   description,
   isSet,
   onSave,
   isSaving,
+  placeholder,
 }: {
   label: string;
   description?: string;
   isSet: boolean;
   onSave: (value: string) => void;
   isSaving: boolean;
+  placeholder?: string;
 }) {
   const [value, setValue] = useState("");
   const [show, setShow] = useState(false);
 
   return (
-    <div className="space-y-2 py-4 border-b border-border/40 last:border-0 last:pb-0">
-      <div className="flex items-start justify-between gap-2">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
         <div>
-          <Label className="text-sm font-medium">{label}</Label>
+          <Label className="text-xs font-medium">{label}</Label>
           {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
         </div>
-        {isSet && (
-          <Badge variant="secondary" className="text-xs shrink-0">Saved</Badge>
-        )}
+        {isSet && <Badge variant="secondary" className="text-xs shrink-0">Saved</Badge>}
       </div>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
             type={show ? "text" : "password"}
-            placeholder={isSet ? "••••••••••••••• (already set)" : "Paste key here"}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="pr-9 font-mono text-sm"
+            placeholder={isSet ? "••••••••••••••••" : (placeholder ?? "Paste API key here")}
+            className="h-8 text-xs pr-8"
           />
           <button
             type="button"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             onClick={() => setShow((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
         </div>
-        <Button
-          size="sm"
-          disabled={!value.trim() || isSaving}
-          onClick={() => {
-            onSave(value.trim());
-            setValue("");
-          }}
-        >
-          {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+        <Button size="sm" className="h-8 text-xs" onClick={() => { onSave(value); setValue(""); }} disabled={!value.trim() || isSaving}>
+          {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
         </Button>
       </div>
     </div>
   );
 }
 
-function GlobalKeysTab() {
+// ── Add LLM Model dialog ──────────────────────────────────────────────────────
+
+function AddLlmModelDialog({
+  open,
+  onOpenChange,
+  provider,
+  modelIdPlaceholder,
+  onCreate,
+  isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  provider: string;
+  modelIdPlaceholder: string;
+  onCreate: (name: string, modelId: string) => void;
+  isSaving: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [modelId, setModelId] = useState("");
+
+  function handleSubmit() {
+    if (!modelId.trim()) return;
+    onCreate(name.trim() || modelId.trim(), modelId.trim());
+    setName("");
+    setModelId("");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">Add {provider} Model</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1">
+            <Label className="text-xs">Model ID</Label>
+            <Input
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              placeholder={modelIdPlaceholder}
+              className="h-8 text-xs font-mono"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">Find model IDs on the provider's website.</p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Display Name <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={modelId || "My model name"}
+              className="h-8 text-xs"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!modelId.trim() || isSaving}>
+            {isSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : null}
+            Add Model
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Provider section ──────────────────────────────────────────────────────────
+
+function ProviderSection({
+  provider,
+  settings,
+  llmConfigs,
+  onSaveKey,
+  isSavingKey,
+  onCreate,
+  isCreating,
+  onActivate,
+  isActivating,
+  onDelete,
+}: {
+  provider: typeof PROVIDERS[number];
+  settings: { [K in typeof provider.keySetField]: boolean } | undefined;
+  llmConfigs: LlmConfig[];
+  onSaveKey: (value: string) => void;
+  isSavingKey: boolean;
+  onCreate: (name: string, modelId: string) => void;
+  isCreating: boolean;
+  onActivate: (id: string) => void;
+  isActivating: boolean;
+  onDelete: (id: string) => void;
+}) {
+  const [addOpen, setAddOpen] = useState(false);
+  const providerConfigs = llmConfigs.filter((c) => c.provider === provider.id);
+  const isKeySet = settings?.[provider.keySetField] ?? false;
+
+  function quickAdd(modelId: string, modelName: string) {
+    onCreate(modelName, modelId);
+  }
+
+  return (
+    <div className="bg-card border border-border/60 rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border/40 bg-muted/30">
+        <p className="text-sm font-semibold">{provider.name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{provider.description}</p>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* API Key */}
+        <ApiKeyField
+          label="API Key"
+          isSet={isKeySet}
+          onSave={onSaveKey}
+          isSaving={isSavingKey}
+          placeholder={provider.keyPlaceholder}
+        />
+
+        {/* Quick-add chips */}
+        {provider.quickModels.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground font-medium">Quick add</p>
+            <div className="flex flex-wrap gap-1.5">
+              {provider.quickModels.map((m) => {
+                const exists = providerConfigs.some((c) => c.modelId === m.id);
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => !exists && quickAdd(m.id, m.name)}
+                    disabled={exists || isCreating}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                      exists
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 cursor-default"
+                        : "border-border hover:border-primary/50 hover:bg-accent cursor-pointer"
+                    }`}
+                  >
+                    {exists && <Check className="w-3 h-3 inline mr-1" />}
+                    {m.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Added models list */}
+        {providerConfigs.length > 0 && (
+          <div className="space-y-2">
+            {providerConfigs.map((config) => (
+              <div
+                key={config.id}
+                className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                  config.isActive
+                    ? "border-emerald-400/60 bg-emerald-50/40 dark:bg-emerald-950/15"
+                    : "border-border/50 bg-background"
+                }`}
+              >
+                <div className="min-w-0">
+                  <span className="font-medium text-sm truncate block">{config.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono truncate block">{config.modelId}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {config.isActive ? (
+                    <Badge className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:border-emerald-800 dark:text-emerald-400">
+                      <Check className="w-2.5 h-2.5 mr-1" />Active
+                    </Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => onActivate(config.id)}
+                      disabled={isActivating}
+                    >
+                      {isActivating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                      Use
+                    </Button>
+                  )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove "{config.name}"?</AlertDialogTitle>
+                        <AlertDialogDescription>This model config will be deleted.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => onDelete(config.id)}
+                        >Delete</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add model button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs border-dashed"
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          Add Model
+        </Button>
+      </div>
+
+      <AddLlmModelDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        provider={provider.name}
+        modelIdPlaceholder={provider.modelIdPlaceholder}
+        onCreate={(name, modelId) => {
+          onCreate(name, modelId);
+          setAddOpen(false);
+        }}
+        isSaving={isCreating}
+      />
+    </div>
+  );
+}
+
+// ── LLM Configs Tab ───────────────────────────────────────────────────────────
+
+function LlmConfigsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: settings, isLoading } = useGetSettings();
-  const [claudeEnabled, setClaudeEnabled] = useState(false);
-  const [togglingClaude, setTogglingClaude] = useState(false);
+  const { data: llmConfigs = [] } = useListLlmConfigs();
+  const { data: settings } = useGetSettings();
   const [savingKey, setSavingKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (settings) setClaudeEnabled(settings.claudeEnabled ?? false);
-  }, [settings]);
 
   const updateSettings = useUpdateSettings({
     mutation: {
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() }); },
+    },
+  });
+
+  const createLlmConfig = useCreateLlmConfig({
+    mutation: {
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
+    },
+  });
+
+  const deleteLlmConfig = useDeleteLlmConfig({
+    mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
+        toast({ title: "Model removed" });
       },
     },
   });
 
-  async function handleSaveKey(field: string, value: string) {
-    setSavingKey(field);
+  const activateLlmConfig = useActivateLlmConfig({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
+        toast({ title: `"${data.name}" is now active` });
+      },
+    },
+  });
+
+  async function handleSaveKey(providerKeyField: string, value: string) {
+    setSavingKey(providerKeyField);
     try {
-      await updateSettings.mutateAsync({ data: { [field]: value } as never });
+      await updateSettings.mutateAsync({ data: { [providerKeyField]: value } as any });
       toast({ title: "API key saved" });
     } finally {
       setSavingKey(null);
     }
   }
 
-  async function handleToggleClaude(enabled: boolean) {
-    setTogglingClaude(true);
-    setClaudeEnabled(enabled);
-    try {
-      await updateSettings.mutateAsync({ data: { claudeEnabled: enabled } as never });
-      toast({ title: `Claude ${enabled ? "enabled" : "disabled"}` });
-    } finally {
-      setTogglingClaude(false);
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+  async function handleCreate(provider: string, name: string, modelId: string) {
+    const existing = llmConfigs.find((c) => c.provider === provider && c.modelId === modelId);
+    if (existing) { toast({ title: "Model already added" }); return; }
+    await createLlmConfig.mutateAsync({ data: { name, provider, modelId } });
+    toast({ title: `"${name}" added` });
   }
 
   return (
-    <div className="space-y-6 max-w-xl">
-      <div className="bg-card border border-border/50 rounded-xl px-6 pt-2 pb-6">
-        <ApiKeyField
-          label="fal.io API Key"
-          description="Used for all image generation calls."
-          isSet={!!settings?.falApiKeySet}
-          onSave={(v) => handleSaveKey("falApiKey", v)}
-          isSaving={savingKey === "falApiKey"}
+    <div className="space-y-4 max-w-xl">
+      <p className="text-sm text-muted-foreground">
+        Add your API key for any provider, then add the models you want to use. Click <strong>Use</strong> to make a model active.
+      </p>
+
+      {PROVIDERS.map((provider) => (
+        <ProviderSection
+          key={provider.id}
+          provider={provider}
+          settings={settings as any}
+          llmConfigs={llmConfigs}
+          onSaveKey={(val) => void handleSaveKey(provider.keyLabel, val)}
+          isSavingKey={savingKey === provider.keyLabel}
+          onCreate={(name, modelId) => void handleCreate(provider.id, name, modelId)}
+          isCreating={createLlmConfig.isPending}
+          onActivate={(id) => activateLlmConfig.mutate({ id })}
+          isActivating={activateLlmConfig.isPending}
+          onDelete={(id) => deleteLlmConfig.mutate({ id })}
         />
-        <ApiKeyField
-          label="OpenRouter API Key"
-          description="Used for AI Q&A and prompt building when Claude mode is off."
-          isSet={!!settings?.openrouterApiKeySet}
-          onSave={(v) => handleSaveKey("openrouterApiKey", v)}
-          isSaving={savingKey === "openrouterApiKey"}
-        />
-        <ApiKeyField
-          label="Claude API Key"
-          description="Used when Claude mode is enabled below."
-          isSet={!!settings?.claudeApiKeySet}
-          onSave={(v) => handleSaveKey("claudeApiKey", v)}
-          isSaving={savingKey === "claudeApiKey"}
-        />
-        <div className="pt-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm font-medium">Use Claude directly</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                When on, Claude is used for Q&amp;A instead of OpenRouter. OpenRouter configs remain inactive.
-              </p>
-            </div>
-            <Switch
-              checked={claudeEnabled}
-              onCheckedChange={handleToggleClaude}
-              disabled={togglingClaude}
-            />
-          </div>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
+
+// ── Image Models (fal.io) Tab ─────────────────────────────────────────────────
 
 function FalModelsTab() {
   const { toast } = useToast();
@@ -211,20 +488,14 @@ function FalModelsTab() {
 
   const createFalModel = useCreateFalModel({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListFalModelsQueryKey() });
-      },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListFalModelsQueryKey() }); },
     },
   });
-
   const updateFalModel = useUpdateFalModel({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListFalModelsQueryKey() });
-      },
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListFalModelsQueryKey() }); },
     },
   });
-
   const deleteFalModel = useDeleteFalModel({
     mutation: {
       onSuccess: () => {
@@ -241,189 +512,7 @@ function FalModelsTab() {
       curlCommand: model.curlCommand ?? "",
       paramsSchema: (model.paramsSchema as Record<string, unknown>) ?? {},
       defaultValues: (model.defaultValues as Record<string, unknown>) ?? {},
-    });
-    setAddOpen(true);
-  }
-
-  async function handleSave(data: {
-    name: string;
-    curlCommand: string;
-    defaultValues: Record<string, unknown>;
-  }) {
-    if (editData) {
-      await updateFalModel.mutateAsync({
-        id: editData.id,
-        data: { name: data.name, defaultValues: data.defaultValues },
-      });
-      toast({ title: "Model updated" });
-    } else {
-      await createFalModel.mutateAsync({
-        data: { name: data.name, curlCommand: data.curlCommand, defaultValues: data.defaultValues } as any,
-      });
-      toast({ title: "fal.io model added" });
-    }
-    setAddOpen(false);
-    setEditData(undefined);
-  }
-
-  return (
-    <div className="space-y-4 max-w-xl">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Add fal.io models by pasting their API curl command.
-        </p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditData(undefined);
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          Add Model
-        </Button>
-      </div>
-
-      {!falModels?.length ? (
-        <div className="border-2 border-dashed border-border rounded-xl p-10 text-center">
-          <Cpu className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm font-medium">No models yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Add one by pasting a fal.io API curl command.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {falModels.map((model) => {
-            const schema = (model.paramsSchema as Record<string, unknown>) ?? {};
-            const paramCount = Object.keys(schema).length;
-            return (
-              <div key={model.id} className="bg-card border border-border/50 rounded-xl p-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm">{model.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{model.endpoint}</p>
-                  {paramCount > 0 && (
-                    <Badge variant="secondary" className="mt-2 text-xs">{paramCount} params</Badge>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs gap-1.5"
-                    onClick={() => handleEdit(model)}
-                  >
-                    <Pencil className="w-3 h-3" />
-                    Edit
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete "{model.name}"?</AlertDialogTitle>
-                        <AlertDialogDescription>This model will be permanently removed.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          onClick={() => deleteFalModel.mutate({ id: model.id })}
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <AddModelModal
-        open={addOpen}
-        onOpenChange={(v) => {
-          setAddOpen(v);
-          if (!v) setEditData(undefined);
-        }}
-        type="fal"
-        editData={editData}
-        onSave={handleSave}
-        isSaving={createFalModel.isPending || updateFalModel.isPending}
-      />
-    </div>
-  );
-}
-
-const BUILTIN_MODELS = [
-  { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "Balanced — recommended for most tasks" },
-  { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Fastest — best for quick responses" },
-] as const;
-
-function LlmConfigsTab() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { data: llmConfigs } = useListLlmConfigs();
-  const { data: settings } = useGetSettings();
-  const [addOpen, setAddOpen] = useState(false);
-  const [editData, setEditData] = useState<EditModelData | undefined>(undefined);
-  const [activatingBuiltin, setActivatingBuiltin] = useState<string | null>(null);
-
-  const createLlmConfig = useCreateLlmConfig({
-    mutation: {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
-    },
-  });
-  const updateLlmConfig = useUpdateLlmConfig({
-    mutation: {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
-    },
-  });
-  const deleteLlmConfig = useDeleteLlmConfig({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
-        toast({ title: "Config deleted" });
-      },
-    },
-  });
-  const activateLlmConfig = useActivateLlmConfig({
-    mutation: {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() }); },
-    },
-  });
-
-  async function handleSetupBuiltin(modelId: string) {
-    setActivatingBuiltin(modelId);
-    try {
-      const resp = await fetch(`${import.meta.env.BASE_URL}api/llm-configs/setup-builtin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ modelId }),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      queryClient.invalidateQueries({ queryKey: getListLlmConfigsQueryKey() });
-      const model = BUILTIN_MODELS.find((m) => m.id === modelId);
-      toast({ title: `${model?.name ?? modelId} is now active` });
-    } catch {
-      toast({ title: "Failed to activate built-in model", variant: "destructive" });
-    } finally {
-      setActivatingBuiltin(null);
-    }
-  }
-
-  function handleEdit(config: LlmConfig) {
-    setEditData({
-      id: config.id,
-      name: config.name,
-      curlCommand: config.curlCommand ?? "",
-      paramsSchema: (config.paramsSchema as Record<string, unknown>) ?? {},
-      defaultValues: (config.defaultValues as Record<string, unknown>) ?? {},
-      systemPrompt: config.systemPrompt ?? "",
+      systemPrompt: "",
     });
     setAddOpen(true);
   }
@@ -435,204 +524,124 @@ function LlmConfigsTab() {
     defaultValues: Record<string, unknown>;
   }) {
     if (editData) {
-      await updateLlmConfig.mutateAsync({
+      await updateFalModel.mutateAsync({
         id: editData.id,
-        data: { name: data.name, systemPrompt: data.systemPrompt ?? null, defaultValues: data.defaultValues },
+        data: { name: data.name, curlCommand: data.curlCommand, defaultValues: data.defaultValues },
       });
-      toast({ title: "Config updated" });
+      toast({ title: "Model updated" });
     } else {
-      await createLlmConfig.mutateAsync({
-        data: {
-          name: data.name,
-          curlCommand: data.curlCommand,
-          systemPrompt: data.systemPrompt || null,
-          defaultValues: data.defaultValues,
-        } as any,
-      });
-      toast({ title: "LLM config added" });
+      await createFalModel.mutateAsync({ data: { name: data.name, curlCommand: data.curlCommand } });
+      toast({ title: "Model added" });
     }
     setAddOpen(false);
     setEditData(undefined);
   }
 
-  const claudeOn = settings?.claudeEnabled;
-  const activeBuiltinId = llmConfigs?.find((c) => c.provider === "replit-anthropic" && c.isActive)?.modelId ?? null;
-  const customConfigs = (llmConfigs ?? []).filter((c) => c.provider !== "replit-anthropic");
-
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-4 max-w-xl">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Add fal.io models by pasting their API curl command.</p>
+        <Button size="sm" onClick={() => { setEditData(undefined); setAddOpen(true); }}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" />Add Model
+        </Button>
+      </div>
 
-      {/* ── Built-in Models ── */}
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-semibold">Built-in Models</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Powered by Claude via Replit AI — no API key required, usage billed to your Replit credits.
-          </p>
+      {!falModels?.length ? (
+        <div className="border-2 border-dashed border-border rounded-xl p-10 text-center">
+          <Settings2 className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm font-medium">No image models yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Add one by pasting a fal.io API curl command.</p>
         </div>
-
-        {BUILTIN_MODELS.map((model) => {
-          const isActive = activeBuiltinId === model.id;
-          const isLoading = activatingBuiltin === model.id;
-          return (
-            <div
-              key={model.id}
-              className={`bg-card border rounded-xl p-4 flex items-center justify-between gap-3 transition-all ${
-                isActive ? "border-emerald-400/60 bg-emerald-50/30 dark:bg-emerald-950/10" : "border-border/50"
-              }`}
-            >
+      ) : (
+        <div className="space-y-3">
+          {falModels.map((model) => (
+            <div key={model.id} className="bg-card border border-border/50 rounded-xl p-4 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm">{model.name}</span>
-                  {isActive && (
-                    <Badge className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:border-emerald-800 dark:text-emerald-400">
-                      <Check className="w-2.5 h-2.5 mr-1" />
-                      Active
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{model.description}</p>
+                <span className="font-semibold text-sm">{model.name}</span>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{model.endpoint}</p>
               </div>
-              {!isActive && (
-                <Button
-                  size="sm"
-                  className="shrink-0 h-8 text-xs"
-                  onClick={() => void handleSetupBuiltin(model.id)}
-                  disabled={!!activatingBuiltin}
-                >
-                  {isLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                  {isLoading ? "Activating…" : "Use This"}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Custom (curl-based) configs ── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Custom Models</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Add via OpenRouter or Claude API curl command.</p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => { setEditData(undefined); setAddOpen(true); }}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Add Config
-          </Button>
-        </div>
-
-        {claudeOn && (
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
-            Claude mode is on. OpenRouter configs are inactive while Claude is being used directly.
-          </div>
-        )}
-
-        {!customConfigs.length ? (
-          <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-            <Settings2 className="w-7 h-7 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm font-medium">No custom configs</p>
-            <p className="text-xs text-muted-foreground mt-1">Add one using an API curl command above.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {customConfigs.map((config) => {
-              const showInactive = claudeOn && !config.isActive;
-              return (
-                <div
-                  key={config.id}
-                  className={`bg-card border rounded-xl p-4 flex items-start justify-between gap-3 ${
-                    config.isActive ? "border-primary/40" : "border-border/50"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{config.name}</span>
-                      {config.isActive && !claudeOn && (
-                        <Badge className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-900">
-                          <Check className="w-2.5 h-2.5 mr-1" />
-                          Active
-                        </Badge>
-                      )}
-                      {showInactive && (
-                        <Badge variant="secondary" className="text-xs text-muted-foreground">
-                          Inactive (Claude mode on)
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {config.provider} — {config.modelId}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    {!config.isActive && !claudeOn && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => {
-                          activateLlmConfig.mutate({ id: config.id });
-                          toast({ title: `"${config.name}" is now active` });
-                        }}
-                        disabled={activateLlmConfig.isPending}
-                      >
-                        {activateLlmConfig.isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                        ) : (
-                          <Check className="w-3 h-3 mr-1" />
-                        )}
-                        Activate
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={() => handleEdit(config)}>
-                      <Pencil className="w-3 h-3" />
-                      Edit
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => handleEdit(model)}>Edit</Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete "{config.name}"?</AlertDialogTitle>
-                          <AlertDialogDescription>This LLM config will be permanently removed.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => deleteLlmConfig.mutate({ id: config.id })}
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete "{model.name}"?</AlertDialogTitle>
+                      <AlertDialogDescription>This fal.io model config will be permanently removed.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => deleteFalModel.mutate({ id: model.id })}
+                      >Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <AddModelModal
         open={addOpen}
         onOpenChange={(v) => { setAddOpen(v); if (!v) setEditData(undefined); }}
-        type="llm"
+        type="fal"
         editData={editData}
         onSave={handleSave}
-        isSaving={createLlmConfig.isPending || updateLlmConfig.isPending}
+        isSaving={createFalModel.isPending || updateFalModel.isPending}
       />
     </div>
   );
 }
+
+// ── API Keys Tab (fal.io key) ─────────────────────────────────────────────────
+
+function ApiKeysTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useGetSettings();
+  const [saving, setSaving] = useState(false);
+
+  const updateSettings = useUpdateSettings({
+    mutation: {
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() }); },
+    },
+  });
+
+  async function saveFalKey(value: string) {
+    setSaving(true);
+    try {
+      await updateSettings.mutateAsync({ data: { falApiKey: value } });
+      toast({ title: "fal.io API key saved" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-xl">
+      <div className="bg-card border border-border/60 rounded-xl p-4">
+        <p className="text-sm font-semibold mb-1">fal.io</p>
+        <p className="text-xs text-muted-foreground mb-4">Required for image generation. Get your key at fal.ai/dashboard.</p>
+        <ApiKeyField
+          label="API Key"
+          isSet={!!settings?.falApiKeySet}
+          onSave={(v) => void saveFalKey(v)}
+          isSaving={saving}
+          placeholder="fal-..."
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   return (
@@ -643,32 +652,32 @@ export default function SettingsPage() {
           <p className="text-muted-foreground mt-1">Configure API keys and AI model configurations.</p>
         </div>
 
-        <Tabs defaultValue="keys">
+        <Tabs defaultValue="llm">
           <TabsList className="mb-6">
-            <TabsTrigger value="keys" className="gap-2">
-              <Key className="w-3.5 h-3.5" />
-              Global Keys
-            </TabsTrigger>
-            <TabsTrigger value="fal" className="gap-2">
+            <TabsTrigger value="llm" className="gap-2">
               <Cpu className="w-3.5 h-3.5" />
+              Language Models
+            </TabsTrigger>
+            <TabsTrigger value="images" className="gap-2">
+              <Settings2 className="w-3.5 h-3.5" />
               Image Models
             </TabsTrigger>
-            <TabsTrigger value="llm" className="gap-2">
-              <Settings2 className="w-3.5 h-3.5" />
-              Language Models
+            <TabsTrigger value="keys" className="gap-2">
+              <Key className="w-3.5 h-3.5" />
+              API Keys
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="keys">
-            <GlobalKeysTab />
+          <TabsContent value="llm">
+            <LlmConfigsTab />
           </TabsContent>
 
-          <TabsContent value="fal">
+          <TabsContent value="images">
             <FalModelsTab />
           </TabsContent>
 
-          <TabsContent value="llm">
-            <LlmConfigsTab />
+          <TabsContent value="keys">
+            <ApiKeysTab />
           </TabsContent>
         </Tabs>
       </div>

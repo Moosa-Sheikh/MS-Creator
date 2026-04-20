@@ -11,5 +11,7 @@ export interface Settings {
   falApiKeySet: boolean;
   openrouterApiKeySet: boolean;
   claudeApiKeySet: boolean;
+  openaiApiKeySet: boolean;
+  googleApiKeySet: boolean;
   claudeEnabled: boolean;
 }

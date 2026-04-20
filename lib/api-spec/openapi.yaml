@@ -1163,6 +1163,10 @@ components:
           type: boolean
         claudeApiKeySet:
           type: boolean
+        openaiApiKeySet:
+          type: boolean
+        googleApiKeySet:
+          type: boolean
         claudeEnabled:
           type: boolean
       required:
@@ -1170,6 +1174,8 @@ components:
         - falApiKeySet
         - openrouterApiKeySet
         - claudeApiKeySet
+        - openaiApiKeySet
+        - googleApiKeySet
         - claudeEnabled
 
     UpdateSettingsBody:
@@ -1180,6 +1186,10 @@ components:
         openrouterApiKey:
           type: ["string", "null"]
         claudeApiKey:
+          type: ["string", "null"]
+        openaiApiKey:
+          type: ["string", "null"]
+        googleApiKey:
           type: ["string", "null"]
         claudeEnabled:
           type: ["boolean", "null"]
@@ -1243,15 +1253,15 @@ components:
           type: string
         provider:
           type: string
-          description: "openrouter or claude"
+          description: "openrouter | anthropic | openai | google"
         modelId:
           type: string
         endpoint:
-          type: string
+          type: ["string", "null"]
         systemPrompt:
           type: ["string", "null"]
         curlCommand:
-          type: string
+          type: ["string", "null"]
         paramsSchema:
           type: object
           additionalProperties: true
@@ -1280,13 +1290,17 @@ components:
       properties:
         name:
           type: string
-        curlCommand:
+        provider:
+          type: string
+          description: "openrouter | anthropic | openai | google"
+        modelId:
           type: string
         systemPrompt:
           type: ["string", "null"]
       required:
         - name
-        - curlCommand
+        - provider
+        - modelId
 
     UpdateLlmConfigBody:
       type: object

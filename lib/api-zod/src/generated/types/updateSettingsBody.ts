@@ -14,5 +14,9 @@ export interface UpdateSettingsBody {
   /** @nullable */
   claudeApiKey?: string | null;
   /** @nullable */
+  openaiApiKey?: string | null;
+  /** @nullable */
+  googleApiKey?: string | null;
+  /** @nullable */
   claudeEnabled?: boolean | null;
 }

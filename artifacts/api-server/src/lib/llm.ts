@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { llmConfigsTable, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -9,146 +11,141 @@ export type LlmMessage = {
   content: string | Array<{ type: string; [key: string]: unknown }>;
 };
 
-export const BUILTIN_MODELS = [
-  { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "Balanced — recommended for most uses" },
-  { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Fastest — ideal for quick responses" },
-] as const;
+type Settings = typeof settingsTable.$inferSelect;
+type LlmConfig = typeof llmConfigsTable.$inferSelect;
 
-export function isBuiltinAvailable(): boolean {
-  return !!(process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL && process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY);
+function textContent(messages: LlmMessage[]): string {
+  return messages
+    .filter((m) => m.role !== "system")
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+    .join("\n");
 }
 
-async function callBuiltinAnthropic(messages: LlmMessage[], modelId: string): Promise<string> {
-  const client = new Anthropic({
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  });
+function systemContent(messages: LlmMessage[]): string {
+  return messages
+    .filter((m) => m.role === "system")
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+    .join("\n");
+}
 
-  const systemMessages = messages.filter((m) => m.role === "system");
-  const chatMessages = messages.filter((m) => m.role !== "system");
-  const systemContent = systemMessages.map((m) => String(m.content)).join("\n");
-
-  logger.info({ model: modelId }, "Calling built-in Anthropic");
-
-  const response = await client.messages.create({
-    model: modelId,
-    max_tokens: 8192,
-    ...(systemContent ? { system: systemContent } : {}),
-    messages: chatMessages.map((m) => ({
+function chatMessages(messages: LlmMessage[]): Array<{ role: "user" | "assistant"; content: string }> {
+  return messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
       role: m.role as "user" | "assistant",
       content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-    })),
-  });
+    }));
+}
 
-  const block = response.content[0];
+async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
+  if (!settings.openrouterApiKey) throw new Error("OpenRouter API key not set. Add it in Settings → API Keys.");
+  const client = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: settings.openrouterApiKey,
+  });
+  const sys = systemContent(messages);
+  const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...(sys ? [{ role: "system" as const, content: sys }] : []),
+    ...chatMessages(messages).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+  ];
+  logger.info({ model: config.modelId }, "Calling OpenRouter");
+  const res = await client.chat.completions.create({
+    model: config.modelId,
+    messages: allMessages,
+    ...(config.defaultValues as object),
+  });
+  const text = res.choices[0]?.message?.content;
+  if (!text) throw new Error("Empty response from OpenRouter");
+  return text;
+}
+
+async function callAnthropic(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
+  if (!settings.claudeApiKey) throw new Error("Anthropic API key not set. Add it in Settings → API Keys.");
+  const client = new Anthropic({ apiKey: settings.claudeApiKey });
+  const sys = systemContent(messages);
+  logger.info({ model: config.modelId }, "Calling Anthropic");
+  const res = await client.messages.create({
+    model: config.modelId,
+    max_tokens: 8192,
+    ...(sys ? { system: sys } : {}),
+    messages: chatMessages(messages),
+  });
+  const block = res.content[0];
   if (block.type === "text") return block.text;
   throw new Error("Unexpected Anthropic response format");
 }
 
-async function ensureBuiltinConfig(): Promise<typeof import("@workspace/db").llmConfigsTable.$inferSelect | null> {
-  if (!isBuiltinAvailable()) return null;
-  const defaultModelId = BUILTIN_MODELS[0].id;
-  const defaultModelName = BUILTIN_MODELS[0].name;
-  // Deactivate all and create/activate the default built-in config
-  await db.update(llmConfigsTable).set({ isActive: false });
-  const [existing] = await db.select().from(llmConfigsTable).where(eq(llmConfigsTable.modelId, defaultModelId));
-  if (existing && existing.provider === "replit-anthropic") {
-    const [activated] = await db.update(llmConfigsTable).set({ isActive: true }).where(eq(llmConfigsTable.id, existing.id)).returning();
-    return activated ?? null;
-  }
-  const [created] = await db.insert(llmConfigsTable).values({
-    name: `${defaultModelName} (Built-in)`,
-    provider: "replit-anthropic",
-    modelId: defaultModelId,
-    endpoint: "built-in",
-    curlCommand: "built-in",
-    paramsSchema: {},
-    defaultValues: {},
-    isActive: true,
-  }).returning();
-  return created ?? null;
+async function callOpenAI(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
+  if (!settings.openaiApiKey) throw new Error("OpenAI API key not set. Add it in Settings → API Keys.");
+  const client = new OpenAI({ apiKey: settings.openaiApiKey });
+  const sys = systemContent(messages);
+  const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...(sys ? [{ role: "system" as const, content: sys }] : []),
+    ...chatMessages(messages).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+  ];
+  logger.info({ model: config.modelId }, "Calling OpenAI");
+  const res = await client.chat.completions.create({
+    model: config.modelId,
+    messages: allMessages,
+    ...(config.defaultValues as object),
+  });
+  const text = res.choices[0]?.message?.content;
+  if (!text) throw new Error("Empty response from OpenAI");
+  return text;
+}
+
+async function callGoogle(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
+  if (!settings.googleApiKey) throw new Error("Google AI API key not set. Add it in Settings → API Keys.");
+  const genAI = new GoogleGenerativeAI(settings.googleApiKey);
+  const model = genAI.getGenerativeModel({ model: config.modelId });
+  const sys = systemContent(messages);
+  const chat = chatMessages(messages);
+  logger.info({ model: config.modelId }, "Calling Google Gemini");
+
+  // For Google, send all messages in the chat format
+  const history = chat.slice(0, -1).map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  const lastMessage = chat[chat.length - 1]?.content ?? "";
+
+  const chatSession = model.startChat({
+    history,
+    ...(sys ? { systemInstruction: sys } : {}),
+  });
+  const res = await chatSession.sendMessage(lastMessage);
+  return res.response.text();
 }
 
 export async function callActiveLlm(messages: LlmMessage[]): Promise<string> {
-  let [activeConfig] = await db
+  const [activeConfig] = await db
     .select()
     .from(llmConfigsTable)
     .where(eq(llmConfigsTable.isActive, true))
     .limit(1);
 
-  // No active config — auto-activate the built-in model if available
   if (!activeConfig) {
-    if (isBuiltinAvailable()) {
-      logger.info("No active LLM config, auto-activating built-in model");
-      activeConfig = (await ensureBuiltinConfig())!;
-    }
-    if (!activeConfig) {
-      throw new Error("No AI model configured. Please add an LLM in Settings to continue.");
-    }
+    throw new Error("No AI model configured. Go to Settings → Language Models and add a model.");
   }
 
-  // Built-in Anthropic path (no API key needed from user)
-  if (activeConfig.provider === "replit-anthropic") {
-    if (!isBuiltinAvailable()) {
-      throw new Error("Built-in AI integration is not available. Please contact support.");
-    }
-    const systemPrompt = activeConfig.systemPrompt;
-    const fullMessages = systemPrompt
-      ? [{ role: "system" as const, content: systemPrompt }, ...messages]
-      : messages;
-    return callBuiltinAnthropic(fullMessages, activeConfig.modelId);
-  }
-
-  // Manual API key path (OpenRouter / Claude direct)
   const [settings] = await db.select().from(settingsTable).limit(1);
-  if (!settings) throw new Error("No settings found. Please configure API keys in Settings.");
+  if (!settings) throw new Error("Settings not found. Please configure the app in Settings.");
 
-  const isClaudeActive = settings.claudeEnabled && settings.claudeApiKey;
-  const apiKey = isClaudeActive ? settings.claudeApiKey : settings.openrouterApiKey;
-
-  if (!apiKey) {
-    throw new Error("No API key configured. Please add your API key in Settings.");
-  }
-
-  const systemPrompt = activeConfig.systemPrompt;
-  const fullMessages = systemPrompt
-    ? [{ role: "system" as const, content: systemPrompt }, ...messages]
+  const sys = activeConfig.systemPrompt;
+  const fullMessages: LlmMessage[] = sys
+    ? [{ role: "system", content: sys }, ...messages]
     : messages;
 
-  const params = {
-    ...(activeConfig.defaultValues as Record<string, unknown>),
-    model: activeConfig.modelId,
-    messages: fullMessages,
-  };
-
-  logger.info({ endpoint: activeConfig.endpoint, model: activeConfig.modelId }, "Calling LLM");
-
-  const response = await fetch(activeConfig.endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      ...(activeConfig.provider === "anthropic" ? { "anthropic-version": "2023-06-01" } : {}),
-    },
-    body: JSON.stringify(params),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`LLM API error ${response.status}: ${err}`);
+  switch (activeConfig.provider) {
+    case "openrouter":
+      return callOpenRouter(fullMessages, activeConfig, settings);
+    case "anthropic":
+      return callAnthropic(fullMessages, activeConfig, settings);
+    case "openai":
+      return callOpenAI(fullMessages, activeConfig, settings);
+    case "google":
+      return callGoogle(fullMessages, activeConfig, settings);
+    default:
+      throw new Error(`Unknown provider: ${activeConfig.provider}`);
   }
-
-  const data = await response.json() as {
-    choices?: Array<{ message: { content: string } }>;
-    content?: Array<{ text: string }>;
-  };
-
-  if (data.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content;
-  }
-  if (data.content?.[0]?.text) {
-    return data.content[0].text;
-  }
-
-  throw new Error("Unexpected LLM response format");
 }

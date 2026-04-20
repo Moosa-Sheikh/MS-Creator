@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@google-cloud/storage": "^7.19.0",
+    "@google/generative-ai": "^0.24.1",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "cookie-parser": "^1.4.7",
@@ -20,6 +21,7 @@
     "express": "^5",
     "google-auth-library": "^10.6.2",
     "iron-session": "^8.0.4",
+    "openai": "^6.34.0",
     "pino": "^9",
     "pino-http": "^10"
   },
