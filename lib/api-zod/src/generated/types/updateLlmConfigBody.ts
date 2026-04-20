@@ -14,4 +14,7 @@ export interface UpdateLlmConfigBody {
   systemPrompt?: string | null;
   defaultValues?: UpdateLlmConfigBodyDefaultValues;
   isActive?: boolean;
+  supportsVision?: boolean;
+  supportsThinking?: boolean;
+  isFree?: boolean;
 }

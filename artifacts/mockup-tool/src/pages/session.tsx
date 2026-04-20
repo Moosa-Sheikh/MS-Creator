@@ -233,7 +233,16 @@ function WizardStep({
 
       if (optionType === "B") {
         await updateSession.mutateAsync({ id: sessionId, data: { ...data, status: "analyzing" } });
-        await analyzeRef.mutateAsync({ id: sessionId });
+        try {
+          await analyzeRef.mutateAsync({ id: sessionId });
+        } catch (err: unknown) {
+          const msg =
+            (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            "Failed to analyze the reference image. Check your model configuration in Settings.";
+          toast({ title: "Image analysis failed", description: msg, variant: "destructive" });
+          await updateSession.mutateAsync({ id: sessionId, data: { status: "draft" } });
+          return;
+        }
       } else {
         await updateSession.mutateAsync({ id: sessionId, data: { ...data, status: "qa" } });
       }
@@ -1598,7 +1607,8 @@ export default function SessionPage() {
       queryKey: getGetSessionQueryKey(id!),
       refetchInterval: (query) => {
         const data = query.state.data as Session | undefined;
-        if (data?.status === "generating" || data?.status === "analyzing") return 3000;
+        const s = data?.status;
+        if (s === "generating" || s === "analyzing" || s === "analyzing_image" || s === "analyzing_vision") return 2000;
         return false;
       },
     },
@@ -1633,13 +1643,37 @@ export default function SessionPage() {
           />
         );
       case "analyzing":
+      case "analyzing_image":
+      case "analyzing_vision": {
+        const stepLabel =
+          session.status === "analyzing_vision"
+            ? "AI reading your image..."
+            : session.status === "analyzing_image"
+            ? "Downloading reference image..."
+            : "Preparing analysis...";
+        const stepDetail =
+          session.status === "analyzing_vision"
+            ? "The model is extracting style, composition, lighting, and mood."
+            : "Fetching your uploaded reference from storage.";
+        const stepNum = session.status === "analyzing_vision" ? 2 : 1;
         return (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
-            <h2 className="text-xl font-semibold">Analyzing Reference Image</h2>
-            <p className="text-muted-foreground text-sm">Extracting style, composition, and mood from your reference...</p>
+          <div className="flex flex-col items-center justify-center gap-5 py-24">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <div className="text-center space-y-1">
+              <h2 className="text-xl font-semibold">Analyzing Reference Image</h2>
+              <p className="text-sm text-muted-foreground">{stepLabel}</p>
+              <p className="text-xs text-muted-foreground/70">{stepDetail}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className={`w-2 h-2 rounded-full ${stepNum >= 1 ? "bg-primary" : "bg-muted"}`} />
+              <span className={stepNum >= 1 ? "text-foreground" : ""}>Step 1: Download image</span>
+              <div className="w-4 h-px bg-border" />
+              <div className={`w-2 h-2 rounded-full ${stepNum >= 2 ? "bg-primary" : "bg-muted"}`} />
+              <span className={stepNum >= 2 ? "text-foreground" : ""}>Step 2: AI analysis</span>
+            </div>
           </div>
         );
+      }
       case "qa":
         return <QAPhase session={session} product={product ?? null} />;
       case "prompt_ready":
@@ -1650,15 +1684,22 @@ export default function SessionPage() {
         return <ResultsGallery session={session} product={product ?? null} />;
       case "failed":
         return (
-          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center max-w-sm mx-auto">
             <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
               <X className="w-8 h-8 text-destructive" />
             </div>
-            <h2 className="text-xl font-semibold">Generation Failed</h2>
-            <p className="text-muted-foreground text-sm">Something went wrong. Check your API keys and model configuration.</p>
-            <Link href={`/products/${session.productId}`}>
-              <Button variant="outline">Back to Product</Button>
-            </Link>
+            <h2 className="text-xl font-semibold">Something went wrong</h2>
+            <p className="text-muted-foreground text-sm">
+              Check your active model's capabilities in Settings — make sure it supports vision if you're using a reference image.
+            </p>
+            <div className="flex gap-2">
+              <Link href="/settings">
+                <Button variant="default" size="sm">Open Settings</Button>
+              </Link>
+              <Link href={`/products/${session.productId}`}>
+                <Button variant="outline" size="sm">Back to Product</Button>
+              </Link>
+            </div>
           </div>
         );
       default:

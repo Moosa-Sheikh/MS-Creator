@@ -13,6 +13,9 @@ export const llmConfigsTable = pgTable("llm_configs", {
   paramsSchema: jsonb("params_schema").notNull().default({}),
   defaultValues: jsonb("default_values").notNull().default({}),
   isActive: boolean("is_active").notNull().default(false),
+  supportsVision: boolean("supports_vision").notNull().default(false),
+  supportsThinking: boolean("supports_thinking").notNull().default(false),
+  isFree: boolean("is_free").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1270,6 +1270,12 @@ components:
           additionalProperties: true
         isActive:
           type: boolean
+        supportsVision:
+          type: boolean
+        supportsThinking:
+          type: boolean
+        isFree:
+          type: boolean
         createdAt:
           type: string
       required:
@@ -1283,6 +1289,9 @@ components:
         - paramsSchema
         - defaultValues
         - isActive
+        - supportsVision
+        - supportsThinking
+        - isFree
         - createdAt
 
     CreateLlmConfigBody:
@@ -1297,6 +1306,12 @@ components:
           type: string
         systemPrompt:
           type: ["string", "null"]
+        supportsVision:
+          type: boolean
+        supportsThinking:
+          type: boolean
+        isFree:
+          type: boolean
       required:
         - name
         - provider
@@ -1315,6 +1330,12 @@ components:
           type: object
           additionalProperties: true
         isActive:
+          type: boolean
+        supportsVision:
+          type: boolean
+        supportsThinking:
+          type: boolean
+        isFree:
           type: boolean
 
     RequestUploadUrlBody:

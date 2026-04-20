@@ -52,9 +52,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { FalModel, LlmConfig } from "@workspace/api-client-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AddModelModal, type EditModelData } from "@/components/settings/AddModelModal";
 
 // ── Provider definitions ──────────────────────────────────────────────────────
+
+type ModelCaps = { supportsVision: boolean; supportsThinking: boolean; isFree: boolean };
 
 const PROVIDERS = [
   {
@@ -65,7 +68,8 @@ const PROVIDERS = [
     keySetField: "openrouterApiKeySet" as const,
     keyPlaceholder: "sk-or-v1-...",
     modelIdPlaceholder: "openai/gpt-4o",
-    quickModels: [] as { id: string; name: string }[],
+    showFreeToggle: true,
+    quickModels: [] as (ModelCaps & { id: string; name: string })[],
   },
   {
     id: "anthropic",
@@ -75,10 +79,11 @@ const PROVIDERS = [
     keySetField: "claudeApiKeySet" as const,
     keyPlaceholder: "sk-ant-...",
     modelIdPlaceholder: "claude-sonnet-4-6",
+    showFreeToggle: false,
     quickModels: [
-      { id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+      { id: "claude-opus-4-5", name: "Claude Opus 4.5", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", supportsVision: true, supportsThinking: false, isFree: false },
     ],
   },
   {
@@ -89,10 +94,11 @@ const PROVIDERS = [
     keySetField: "openaiApiKeySet" as const,
     keyPlaceholder: "sk-proj-...",
     modelIdPlaceholder: "gpt-4o",
+    showFreeToggle: false,
     quickModels: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-      { id: "o4-mini", name: "o4-mini" },
+      { id: "gpt-4o", name: "GPT-4o", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "o4-mini", name: "o4-mini", supportsVision: false, supportsThinking: true, isFree: false },
     ],
   },
   {
@@ -103,13 +109,14 @@ const PROVIDERS = [
     keySetField: "googleApiKeySet" as const,
     keyPlaceholder: "AIza...",
     modelIdPlaceholder: "gemini-2.0-flash",
+    showFreeToggle: false,
     quickModels: [
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-      { id: "gemini-2.5-pro-preview-03-25", name: "Gemini 2.5 Pro" },
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", supportsVision: true, supportsThinking: false, isFree: false },
+      { id: "gemini-2.5-pro-preview-03-25", name: "Gemini 2.5 Pro", supportsVision: true, supportsThinking: true, isFree: false },
     ],
   },
-] as const;
+];
 
 // ── Shared components ─────────────────────────────────────────────────────────
 
@@ -172,6 +179,7 @@ function AddLlmModelDialog({
   onOpenChange,
   provider,
   modelIdPlaceholder,
+  showFreeToggle,
   onCreate,
   isSaving,
 }: {
@@ -179,17 +187,20 @@ function AddLlmModelDialog({
   onOpenChange: (v: boolean) => void;
   provider: string;
   modelIdPlaceholder: string;
-  onCreate: (name: string, modelId: string) => void;
+  showFreeToggle: boolean;
+  onCreate: (name: string, modelId: string, caps: ModelCaps) => void;
   isSaving: boolean;
 }) {
   const [name, setName] = useState("");
   const [modelId, setModelId] = useState("");
+  const [supportsVision, setSupportsVision] = useState(false);
+  const [supportsThinking, setSupportsThinking] = useState(false);
+  const [isFree, setIsFree] = useState(false);
 
   function handleSubmit() {
     if (!modelId.trim()) return;
-    onCreate(name.trim() || modelId.trim(), modelId.trim());
-    setName("");
-    setModelId("");
+    onCreate(name.trim() || modelId.trim(), modelId.trim(), { supportsVision, supportsThinking, isFree });
+    setName(""); setModelId(""); setSupportsVision(false); setSupportsThinking(false); setIsFree(false);
   }
 
   return (
@@ -219,6 +230,49 @@ function AddLlmModelDialog({
               className="h-8 text-xs"
             />
           </div>
+          <div className="space-y-2 pt-1 border-t border-border/50">
+            <p className="text-xs text-muted-foreground font-medium">Model capabilities</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <Checkbox
+                  id="vision"
+                  checked={supportsVision}
+                  onCheckedChange={(v) => setSupportsVision(!!v)}
+                  className="h-3.5 w-3.5"
+                />
+                <div>
+                  <span className="text-xs font-medium">Supports vision</span>
+                  <p className="text-xs text-muted-foreground">Can analyze images (required for reference image analysis)</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <Checkbox
+                  id="thinking"
+                  checked={supportsThinking}
+                  onCheckedChange={(v) => setSupportsThinking(!!v)}
+                  className="h-3.5 w-3.5"
+                />
+                <div>
+                  <span className="text-xs font-medium">Thinking / extended reasoning</span>
+                  <p className="text-xs text-muted-foreground">Model reasons step-by-step before answering (e.g. :thinking suffix)</p>
+                </div>
+              </label>
+              {showFreeToggle && (
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <Checkbox
+                    id="free"
+                    checked={isFree}
+                    onCheckedChange={(v) => setIsFree(!!v)}
+                    className="h-3.5 w-3.5"
+                  />
+                  <div>
+                    <span className="text-xs font-medium">Free model</span>
+                    <p className="text-xs text-muted-foreground">This model has no cost (e.g. models with :free suffix)</p>
+                  </div>
+                </label>
+              )}
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -246,12 +300,12 @@ function ProviderSection({
   isActivating,
   onDelete,
 }: {
-  provider: typeof PROVIDERS[number];
+  provider: (typeof PROVIDERS)[number];
   settings: { [K in typeof provider.keySetField]: boolean } | undefined;
   llmConfigs: LlmConfig[];
   onSaveKey: (value: string) => void;
   isSavingKey: boolean;
-  onCreate: (name: string, modelId: string) => void;
+  onCreate: (name: string, modelId: string, caps: ModelCaps) => void;
   isCreating: boolean;
   onActivate: (id: string) => void;
   isActivating: boolean;
@@ -261,8 +315,13 @@ function ProviderSection({
   const providerConfigs = llmConfigs.filter((c) => c.provider === provider.id);
   const isKeySet = settings?.[provider.keySetField] ?? false;
 
-  function quickAdd(modelId: string, modelName: string) {
-    onCreate(modelName, modelId);
+  function quickAdd(m: (typeof provider.quickModels)[number]) {
+    const caps: ModelCaps = {
+      supportsVision: "supportsVision" in m ? (m.supportsVision as boolean) : false,
+      supportsThinking: "supportsThinking" in m ? (m.supportsThinking as boolean) : false,
+      isFree: "isFree" in m ? (m.isFree as boolean) : false,
+    };
+    onCreate(m.name, m.id, caps);
   }
 
   return (
@@ -293,7 +352,7 @@ function ProviderSection({
                 return (
                   <button
                     key={m.id}
-                    onClick={() => !exists && quickAdd(m.id, m.name)}
+                    onClick={() => !exists && quickAdd(m)}
                     disabled={exists || isCreating}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
                       exists
@@ -323,7 +382,18 @@ function ProviderSection({
                 }`}
               >
                 <div className="min-w-0">
-                  <span className="font-medium text-sm truncate block">{config.name}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium text-sm truncate">{config.name}</span>
+                    {config.supportsVision && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 font-medium shrink-0">vision</span>
+                    )}
+                    {config.supportsThinking && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 font-medium shrink-0">thinking</span>
+                    )}
+                    {config.isFree && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-medium shrink-0">free</span>
+                    )}
+                  </div>
                   <span className="text-xs text-muted-foreground font-mono truncate block">{config.modelId}</span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -386,8 +456,9 @@ function ProviderSection({
         onOpenChange={setAddOpen}
         provider={provider.name}
         modelIdPlaceholder={provider.modelIdPlaceholder}
-        onCreate={(name, modelId) => {
-          onCreate(name, modelId);
+        showFreeToggle={provider.showFreeToggle}
+        onCreate={(name, modelId, caps) => {
+          onCreate(name, modelId, caps);
           setAddOpen(false);
         }}
         isSaving={isCreating}
@@ -445,10 +516,10 @@ function LlmConfigsTab() {
     }
   }
 
-  async function handleCreate(provider: string, name: string, modelId: string) {
+  async function handleCreate(provider: string, name: string, modelId: string, caps: ModelCaps) {
     const existing = llmConfigs.find((c) => c.provider === provider && c.modelId === modelId);
     if (existing) { toast({ title: "Model already added" }); return; }
-    await createLlmConfig.mutateAsync({ data: { name, provider, modelId } });
+    await createLlmConfig.mutateAsync({ data: { name, provider, modelId, ...caps } });
     toast({ title: `"${name}" added` });
   }
 
@@ -461,12 +532,12 @@ function LlmConfigsTab() {
       {PROVIDERS.map((provider) => (
         <ProviderSection
           key={provider.id}
-          provider={provider}
+          provider={provider as any}
           settings={settings as any}
           llmConfigs={llmConfigs}
           onSaveKey={(val) => void handleSaveKey(provider.keyLabel, val)}
           isSavingKey={savingKey === provider.keyLabel}
-          onCreate={(name, modelId) => void handleCreate(provider.id, name, modelId)}
+          onCreate={(name, modelId, caps) => void handleCreate(provider.id, name, modelId, caps)}
           isCreating={createLlmConfig.isPending}
           onActivate={(id) => activateLlmConfig.mutate({ id })}
           isActivating={activateLlmConfig.isPending}

@@ -13,4 +13,7 @@ export interface CreateLlmConfigBody {
   modelId: string;
   /** @nullable */
   systemPrompt?: string | null;
+  supportsVision?: boolean;
+  supportsThinking?: boolean;
+  isFree?: boolean;
 }

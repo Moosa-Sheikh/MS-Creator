@@ -312,6 +312,9 @@ export interface LlmConfig {
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
   isActive: boolean;
+  supportsVision: boolean;
+  supportsThinking: boolean;
+  isFree: boolean;
   createdAt: string;
 }
 
@@ -322,6 +325,9 @@ export interface CreateLlmConfigBody {
   modelId: string;
   /** @nullable */
   systemPrompt?: string | null;
+  supportsVision?: boolean;
+  supportsThinking?: boolean;
+  isFree?: boolean;
 }
 
 export type UpdateLlmConfigBodyDefaultValues = { [key: string]: unknown };
@@ -333,6 +339,9 @@ export interface UpdateLlmConfigBody {
   systemPrompt?: string | null;
   defaultValues?: UpdateLlmConfigBodyDefaultValues;
   isActive?: boolean;
+  supportsVision?: boolean;
+  supportsThinking?: boolean;
+  isFree?: boolean;
 }
 
 export interface RequestUploadUrlBody {

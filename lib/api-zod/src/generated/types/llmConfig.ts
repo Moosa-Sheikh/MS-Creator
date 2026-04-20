@@ -23,5 +23,8 @@ export interface LlmConfig {
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
   isActive: boolean;
+  supportsVision: boolean;
+  supportsThinking: boolean;
+  isFree: boolean;
   createdAt: string;
 }

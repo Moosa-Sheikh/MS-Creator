@@ -132,7 +132,7 @@ router.get("/llm-configs", async (_req, res): Promise<void> => {
 router.post("/llm-configs", async (req, res): Promise<void> => {
   const parsed = CreateLlmConfigBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { name, provider, modelId, systemPrompt } = parsed.data;
+  const { name, provider, modelId, systemPrompt, supportsVision, supportsThinking, isFree } = parsed.data;
   if (!VALID_PROVIDERS.includes(provider as typeof VALID_PROVIDERS[number])) {
     res.status(400).json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(", ")}` });
     return;
@@ -140,6 +140,9 @@ router.post("/llm-configs", async (req, res): Promise<void> => {
   const [config] = await db.insert(llmConfigsTable).values({
     name, provider, modelId, systemPrompt: systemPrompt ?? null,
     paramsSchema: {}, defaultValues: {}, isActive: false,
+    supportsVision: supportsVision ?? false,
+    supportsThinking: supportsThinking ?? false,
+    isFree: isFree ?? false,
   }).returning();
   res.status(201).json(config);
 });
@@ -154,6 +157,9 @@ router.patch("/llm-configs/:id", async (req, res): Promise<void> => {
   if (parsed.data.systemPrompt !== undefined) update.systemPrompt = parsed.data.systemPrompt;
   if (parsed.data.isActive !== undefined) update.isActive = parsed.data.isActive;
   if (parsed.data.defaultValues) update.defaultValues = parsed.data.defaultValues;
+  if (parsed.data.supportsVision !== undefined) update.supportsVision = parsed.data.supportsVision;
+  if (parsed.data.supportsThinking !== undefined) update.supportsThinking = parsed.data.supportsThinking;
+  if (parsed.data.isFree !== undefined) update.isFree = parsed.data.isFree;
   const [config] = await db.update(llmConfigsTable).set(update).where(eq(llmConfigsTable.id, params.data.id)).returning();
   if (!config) { res.status(404).json({ error: "Config not found" }); return; }
   res.json(config);

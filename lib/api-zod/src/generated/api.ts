@@ -588,6 +588,9 @@ export const ListLlmConfigsResponseItem = zod.object({
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),
+  supportsVision: zod.boolean(),
+  supportsThinking: zod.boolean(),
+  isFree: zod.boolean(),
   createdAt: zod.string(),
 });
 export const ListLlmConfigsResponse = zod.array(ListLlmConfigsResponseItem);
@@ -600,6 +603,9 @@ export const CreateLlmConfigBody = zod.object({
   provider: zod.string().describe("openrouter | anthropic | openai | google"),
   modelId: zod.string(),
   systemPrompt: zod.string().nullish(),
+  supportsVision: zod.boolean().optional(),
+  supportsThinking: zod.boolean().optional(),
+  isFree: zod.boolean().optional(),
 });
 
 /**
@@ -615,6 +621,9 @@ export const UpdateLlmConfigBody = zod.object({
   systemPrompt: zod.string().nullish(),
   defaultValues: zod.record(zod.string(), zod.unknown()).optional(),
   isActive: zod.boolean().optional(),
+  supportsVision: zod.boolean().optional(),
+  supportsThinking: zod.boolean().optional(),
+  isFree: zod.boolean().optional(),
 });
 
 export const UpdateLlmConfigResponse = zod.object({
@@ -628,6 +637,9 @@ export const UpdateLlmConfigResponse = zod.object({
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),
+  supportsVision: zod.boolean(),
+  supportsThinking: zod.boolean(),
+  isFree: zod.boolean(),
   createdAt: zod.string(),
 });
 
@@ -656,6 +668,9 @@ export const ActivateLlmConfigResponse = zod.object({
   paramsSchema: zod.record(zod.string(), zod.unknown()),
   defaultValues: zod.record(zod.string(), zod.unknown()),
   isActive: zod.boolean(),
+  supportsVision: zod.boolean(),
+  supportsThinking: zod.boolean(),
+  isFree: zod.boolean(),
   createdAt: zod.string(),
 });
 

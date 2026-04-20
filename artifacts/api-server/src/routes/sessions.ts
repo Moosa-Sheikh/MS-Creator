@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, sessionsTable } from "@workspace/db";
+import { db, sessionsTable, llmConfigsTable } from "@workspace/db";
 import {
   CreateSessionBody,
   UpdateSessionBody,
@@ -132,8 +132,25 @@ router.post("/sessions/:id/analyze-reference", async (req, res): Promise<void> =
     return;
   }
 
+  // Check that the active model supports vision before proceeding
+  const [activeConfig] = await db.select().from(llmConfigsTable).where(eq(llmConfigsTable.isActive, true)).limit(1);
+  if (!activeConfig) {
+    res.status(400).json({ error: "No AI model configured. Go to Settings → Language Models and add a model." });
+    return;
+  }
+  if (!activeConfig.supportsVision) {
+    res.status(400).json({
+      error: `"${activeConfig.name}" does not support image analysis. Enable "Supports vision" for this model in Settings → Language Models, or switch to a vision-capable model.`,
+    });
+    return;
+  }
+
   try {
-    // Download image from object storage and convert to base64 data URL for LLM vision
+    // Step 1: Downloading image
+    await db.update(sessionsTable)
+      .set({ status: "analyzing_image", updatedAt: new Date() })
+      .where(eq(sessionsTable.id, session.id));
+
     const storageService = new ObjectStorageService();
     let imageContent: { type: string; image_url?: { url: string }; text?: string };
     try {
@@ -144,9 +161,13 @@ router.post("/sessions/:id/analyze-reference", async (req, res): Promise<void> =
       const base64 = buffer.toString("base64");
       imageContent = { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } };
     } catch {
-      // Fallback: try using the objectPath directly (may work if publicly accessible)
       imageContent = { type: "image_url", image_url: { url: session.referenceImageUrl } };
     }
+
+    // Step 2: AI analyzing image
+    await db.update(sessionsTable)
+      .set({ status: "analyzing_vision", updatedAt: new Date() })
+      .where(eq(sessionsTable.id, session.id));
 
     const rawAnalysis = await callActiveLlm([
       {
@@ -188,12 +209,12 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
     res.json({ analysis: analysisData, sessionId: session.id });
   } catch (err: unknown) {
     req.log.error({ err }, "Failed to analyze reference image");
-    // Even if analysis fails, transition to Q&A so user isn't stuck
+    const errMsg = err instanceof Error ? err.message : "Failed to analyze image";
     await db
       .update(sessionsTable)
-      .set({ status: "qa", updatedAt: new Date() })
+      .set({ status: "failed", updatedAt: new Date() })
       .where(eq(sessionsTable.id, session.id));
-    res.status(500).json({ error: err instanceof Error ? err.message : "Failed to analyze image" });
+    res.status(500).json({ error: errMsg });
   }
 });
 
