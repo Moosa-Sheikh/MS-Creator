@@ -11,6 +11,13 @@ import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
+// Storage must be mounted BEFORE any authenticated routers.
+// The authenticated routers apply requireAuth as a blanket middleware that
+// intercepts all requests — including storage requests — if mounted first.
+// GET /storage/objects/* and GET /storage/public-objects/* are intentionally
+// public so that fal.io can download product images.
+router.use(storageRouter);
+
 router.use(healthRouter);
 router.use(authRouter);
 router.use(productsRouter);
@@ -19,6 +26,5 @@ router.use(aiRouter);
 router.use(generationRouter);
 router.use(templatesRouter);
 router.use(settingsRouter);
-router.use(storageRouter);
 
 export default router;

@@ -1351,7 +1351,7 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
                 </Select>
               </div>
 
-              {selectedModel && Object.keys(paramsSchema).length > 0 && (
+              {selectedModel && Object.keys(paramsSchema).filter(k => !(paramsSchema[k] as {auto?:boolean}).auto).length > 0 && (
                 <div className="border border-border/50 rounded-xl overflow-hidden">
                   <button
                     className="w-full flex items-center justify-between p-3 text-xs text-muted-foreground hover:bg-muted/30 transition-colors font-medium"
@@ -1362,7 +1362,7 @@ function PromptEnhancer({ session, product }: { session: Session; product: Produ
                   </button>
                   {showAdvancedParams && (
                     <div className="p-3 border-t border-border/50 space-y-3">
-                      {Object.entries(paramsSchema).map(([key, def]) => {
+                      {Object.entries(paramsSchema).filter(([, def]) => !(def as {auto?:boolean}).auto).map(([key, def]) => {
                         const d = def as { type?: string; default?: unknown };
                         const value = falParams[key] ?? d.default ?? "";
                         if (d.type === "boolean") {
