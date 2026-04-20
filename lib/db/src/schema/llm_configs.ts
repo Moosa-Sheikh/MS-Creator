@@ -12,6 +12,7 @@ export const llmConfigsTable = pgTable("llm_configs", {
   curlCommand: text("curl_command"),
   paramsSchema: jsonb("params_schema").notNull().default({}),
   defaultValues: jsonb("default_values").notNull().default({}),
+  apiKey: text("api_key"),
   isActive: boolean("is_active").notNull().default(false),
   supportsVision: boolean("supports_vision").notNull().default(false),
   supportsThinking: boolean("supports_thinking").notNull().default(false),

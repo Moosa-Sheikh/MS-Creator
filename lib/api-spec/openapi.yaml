@@ -1268,6 +1268,8 @@ components:
         defaultValues:
           type: object
           additionalProperties: true
+        apiKey:
+          type: ["string", "null"]
         isActive:
           type: boolean
         supportsVision:
@@ -1288,6 +1290,7 @@ components:
         - curlCommand
         - paramsSchema
         - defaultValues
+        - apiKey
         - isActive
         - supportsVision
         - supportsThinking
@@ -1303,6 +1306,8 @@ components:
           type: string
           description: "openrouter | anthropic | openai | google"
         modelId:
+          type: string
+        apiKey:
           type: string
         systemPrompt:
           type: ["string", "null"]
@@ -1321,6 +1326,8 @@ components:
       type: object
       properties:
         name:
+          type: string
+        apiKey:
           type: string
         curlCommand:
           type: string

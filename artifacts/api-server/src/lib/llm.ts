@@ -38,10 +38,11 @@ function chatMessages(messages: LlmMessage[]): Array<{ role: "user" | "assistant
 }
 
 async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
-  if (!settings.openrouterApiKey) throw new Error("OpenRouter API key not set. Add it in Settings → API Keys.");
+  const apiKey = config.apiKey || settings.openrouterApiKey;
+  if (!apiKey) throw new Error("OpenRouter API key not set. Add it in Settings → API Keys or on the model config.");
   const client = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
-    apiKey: settings.openrouterApiKey,
+    apiKey,
   });
   const sys = systemContent(messages);
   const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -60,8 +61,9 @@ async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, setting
 }
 
 async function callAnthropic(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
-  if (!settings.claudeApiKey) throw new Error("Anthropic API key not set. Add it in Settings → API Keys.");
-  const client = new Anthropic({ apiKey: settings.claudeApiKey });
+  const apiKey = config.apiKey || settings.claudeApiKey;
+  if (!apiKey) throw new Error("Anthropic API key not set. Add it in Settings → API Keys or on the model config.");
+  const client = new Anthropic({ apiKey });
   const sys = systemContent(messages);
   logger.info({ model: config.modelId }, "Calling Anthropic");
   const res = await client.messages.create({
@@ -76,8 +78,9 @@ async function callAnthropic(messages: LlmMessage[], config: LlmConfig, settings
 }
 
 async function callOpenAI(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
-  if (!settings.openaiApiKey) throw new Error("OpenAI API key not set. Add it in Settings → API Keys.");
-  const client = new OpenAI({ apiKey: settings.openaiApiKey });
+  const apiKey = config.apiKey || settings.openaiApiKey;
+  if (!apiKey) throw new Error("OpenAI API key not set. Add it in Settings → API Keys or on the model config.");
+  const client = new OpenAI({ apiKey });
   const sys = systemContent(messages);
   const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     ...(sys ? [{ role: "system" as const, content: sys }] : []),
@@ -95,8 +98,9 @@ async function callOpenAI(messages: LlmMessage[], config: LlmConfig, settings: S
 }
 
 async function callGoogle(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
-  if (!settings.googleApiKey) throw new Error("Google AI API key not set. Add it in Settings → API Keys.");
-  const genAI = new GoogleGenerativeAI(settings.googleApiKey);
+  const apiKey = config.apiKey || settings.googleApiKey;
+  if (!apiKey) throw new Error("Google AI API key not set. Add it in Settings → API Keys or on the model config.");
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: config.modelId });
   const sys = systemContent(messages);
   const chat = chatMessages(messages);

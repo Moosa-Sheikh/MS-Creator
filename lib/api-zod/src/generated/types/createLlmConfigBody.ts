@@ -11,6 +11,7 @@ export interface CreateLlmConfigBody {
   /** openrouter | anthropic | openai | google */
   provider: string;
   modelId: string;
+  apiKey?: string;
   /** @nullable */
   systemPrompt?: string | null;
   supportsVision?: boolean;

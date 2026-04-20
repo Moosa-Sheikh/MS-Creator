@@ -132,13 +132,13 @@ router.get("/llm-configs", async (_req, res): Promise<void> => {
 router.post("/llm-configs", async (req, res): Promise<void> => {
   const parsed = CreateLlmConfigBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { name, provider, modelId, systemPrompt, supportsVision, supportsThinking, isFree } = parsed.data;
+  const { name, provider, modelId, apiKey, systemPrompt, supportsVision, supportsThinking, isFree } = parsed.data;
   if (!VALID_PROVIDERS.includes(provider as typeof VALID_PROVIDERS[number])) {
     res.status(400).json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(", ")}` });
     return;
   }
   const [config] = await db.insert(llmConfigsTable).values({
-    name, provider, modelId, systemPrompt: systemPrompt ?? null,
+    name, provider, modelId, apiKey: apiKey ?? null, systemPrompt: systemPrompt ?? null,
     paramsSchema: {}, defaultValues: {}, isActive: false,
     supportsVision: supportsVision ?? false,
     supportsThinking: supportsThinking ?? false,
@@ -154,6 +154,7 @@ router.patch("/llm-configs/:id", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const update: Record<string, unknown> = {};
   if (parsed.data.name) update.name = parsed.data.name;
+  if (parsed.data.apiKey !== undefined) update.apiKey = parsed.data.apiKey;
   if (parsed.data.systemPrompt !== undefined) update.systemPrompt = parsed.data.systemPrompt;
   if (parsed.data.isActive !== undefined) update.isActive = parsed.data.isActive;
   if (parsed.data.defaultValues) update.defaultValues = parsed.data.defaultValues;

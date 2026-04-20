@@ -22,6 +22,8 @@ export interface LlmConfig {
   curlCommand: string | null;
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
+  /** @nullable */
+  apiKey: string | null;
   isActive: boolean;
   supportsVision: boolean;
   supportsThinking: boolean;

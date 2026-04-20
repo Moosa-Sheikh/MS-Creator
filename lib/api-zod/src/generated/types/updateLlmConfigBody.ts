@@ -9,6 +9,7 @@ import type { UpdateLlmConfigBodyDefaultValues } from "./updateLlmConfigBodyDefa
 
 export interface UpdateLlmConfigBody {
   name?: string;
+  apiKey?: string;
   curlCommand?: string;
   /** @nullable */
   systemPrompt?: string | null;

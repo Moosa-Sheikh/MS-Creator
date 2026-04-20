@@ -311,6 +311,8 @@ export interface LlmConfig {
   curlCommand: string | null;
   paramsSchema: LlmConfigParamsSchema;
   defaultValues: LlmConfigDefaultValues;
+  /** @nullable */
+  apiKey: string | null;
   isActive: boolean;
   supportsVision: boolean;
   supportsThinking: boolean;
@@ -323,6 +325,7 @@ export interface CreateLlmConfigBody {
   /** openrouter | anthropic | openai | google */
   provider: string;
   modelId: string;
+  apiKey?: string;
   /** @nullable */
   systemPrompt?: string | null;
   supportsVision?: boolean;
@@ -334,6 +337,7 @@ export type UpdateLlmConfigBodyDefaultValues = { [key: string]: unknown };
 
 export interface UpdateLlmConfigBody {
   name?: string;
+  apiKey?: string;
   curlCommand?: string;
   /** @nullable */
   systemPrompt?: string | null;
