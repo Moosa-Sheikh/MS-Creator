@@ -1,40 +1,89 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 import { db } from "@workspace/db";
 import { llmConfigsTable, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
+export type ContentPart = { type: string; [key: string]: unknown };
+
 export type LlmMessage = {
   role: "system" | "user" | "assistant";
-  content: string | Array<{ type: string; [key: string]: unknown }>;
+  content: string | ContentPart[];
 };
 
 type Settings = typeof settingsTable.$inferSelect;
 type LlmConfig = typeof llmConfigsTable.$inferSelect;
 
-function textContent(messages: LlmMessage[]): string {
-  return messages
-    .filter((m) => m.role !== "system")
-    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+/** Extract text-only content for providers that don't support vision in this path */
+function contentAsString(content: string | ContentPart[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((p) => p.type === "text")
+    .map((p) => (p.text as string) ?? "")
     .join("\n");
 }
 
 function systemContent(messages: LlmMessage[]): string {
   return messages
     .filter((m) => m.role === "system")
-    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+    .map((m) => contentAsString(m.content))
     .join("\n");
 }
 
-function chatMessages(messages: LlmMessage[]): Array<{ role: "user" | "assistant"; content: string }> {
+/**
+ * Returns chat messages preserving array content for vision-capable providers.
+ * OpenAI/OpenRouter format: content can be string or ContentPart[]
+ */
+function chatMessagesRaw(messages: LlmMessage[]): Array<{ role: "user" | "assistant"; content: string | ContentPart[] }> {
   return messages
     .filter((m) => m.role !== "system")
     .map((m) => ({
       role: m.role as "user" | "assistant",
-      content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      content: m.content,
     }));
+}
+
+/**
+ * Convert OpenAI-style vision content parts to Anthropic content blocks.
+ * OpenAI image_url with data URI → Anthropic base64 image block.
+ */
+function toAnthropicContent(content: string | ContentPart[]): Anthropic.MessageParam["content"] {
+  if (typeof content === "string") return content;
+  return content.map((part): Anthropic.ContentBlockParam => {
+    if (part.type === "image_url") {
+      const imageUrl = (part.image_url as { url: string }).url;
+      if (imageUrl.startsWith("data:")) {
+        const [header, data] = imageUrl.split(",");
+        const mediaType = header.replace("data:", "").replace(";base64", "") as Anthropic.Base64ImageSource["media_type"];
+        return { type: "image", source: { type: "base64", media_type: mediaType, data } };
+      }
+      // URL-based image
+      return { type: "image", source: { type: "url", url: imageUrl } as Anthropic.URLImageSource };
+    }
+    return { type: "text", text: contentAsString([part]) };
+  });
+}
+
+/**
+ * Convert OpenAI-style vision content parts to Google Generative AI parts.
+ */
+function toGoogleParts(content: string | ContentPart[]): Part[] {
+  if (typeof content === "string") return [{ text: content }];
+  return content.flatMap((part): Part[] => {
+    if (part.type === "image_url") {
+      const imageUrl = (part.image_url as { url: string }).url;
+      if (imageUrl.startsWith("data:")) {
+        const [header, data] = imageUrl.split(",");
+        const mimeType = header.replace("data:", "").replace(";base64", "");
+        return [{ inlineData: { mimeType, data } }];
+      }
+      // External URL — pass as text fallback (Google doesn't natively support arbitrary image URLs in all contexts)
+      return [{ text: `[image: ${imageUrl}]` }];
+    }
+    return [{ text: contentAsString([part]) }];
+  });
 }
 
 async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
@@ -45,10 +94,16 @@ async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, setting
     apiKey,
   });
   const sys = systemContent(messages);
-  const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+  const rawMessages = chatMessagesRaw(messages);
+  // OpenRouter uses OpenAI-compatible format — content arrays are supported natively
+  const allMessages = [
     ...(sys ? [{ role: "system" as const, content: sys }] : []),
-    ...chatMessages(messages).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-  ];
+    ...rawMessages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      // OpenAI SDK accepts content as string | Array<ChatCompletionContentPart>
+      content: m.content as string,
+    })),
+  ] as OpenAI.Chat.ChatCompletionMessageParam[];
   logger.info({ model: config.modelId }, "Calling OpenRouter");
   const res = await client.chat.completions.create({
     model: config.modelId,
@@ -66,11 +121,15 @@ async function callAnthropic(messages: LlmMessage[], config: LlmConfig, settings
   const client = new Anthropic({ apiKey });
   const sys = systemContent(messages);
   logger.info({ model: config.modelId }, "Calling Anthropic");
+  const anthropicMessages: Anthropic.MessageParam[] = chatMessagesRaw(messages).map((m) => ({
+    role: m.role,
+    content: toAnthropicContent(m.content),
+  }));
   const res = await client.messages.create({
     model: config.modelId,
     max_tokens: 8192,
     ...(sys ? { system: sys } : {}),
-    messages: chatMessages(messages),
+    messages: anthropicMessages,
   });
   const block = res.content[0];
   if (block.type === "text") return block.text;
@@ -82,10 +141,14 @@ async function callOpenAI(messages: LlmMessage[], config: LlmConfig, settings: S
   if (!apiKey) throw new Error("OpenAI API key not set. Add it in Settings → API Keys or on the model config.");
   const client = new OpenAI({ apiKey });
   const sys = systemContent(messages);
-  const allMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+  const rawMessages = chatMessagesRaw(messages);
+  const allMessages = [
     ...(sys ? [{ role: "system" as const, content: sys }] : []),
-    ...chatMessages(messages).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-  ];
+    ...rawMessages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content as string,
+    })),
+  ] as OpenAI.Chat.ChatCompletionMessageParam[];
   logger.info({ model: config.modelId }, "Calling OpenAI");
   const res = await client.chat.completions.create({
     model: config.modelId,
@@ -103,21 +166,21 @@ async function callGoogle(messages: LlmMessage[], config: LlmConfig, settings: S
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: config.modelId });
   const sys = systemContent(messages);
-  const chat = chatMessages(messages);
+  const rawMessages = chatMessagesRaw(messages);
   logger.info({ model: config.modelId }, "Calling Google Gemini");
 
-  // For Google, send all messages in the chat format
-  const history = chat.slice(0, -1).map((m) => ({
+  const history = rawMessages.slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
+    parts: toGoogleParts(m.content),
   }));
-  const lastMessage = chat[chat.length - 1]?.content ?? "";
+  const lastMessage = rawMessages[rawMessages.length - 1];
+  const lastParts = lastMessage ? toGoogleParts(lastMessage.content) : [{ text: "" }];
 
   const chatSession = model.startChat({
     history,
     ...(sys ? { systemInstruction: sys } : {}),
   });
-  const res = await chatSession.sendMessage(lastMessage);
+  const res = await chatSession.sendMessage(lastParts);
   return res.response.text();
 }
 
