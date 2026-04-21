@@ -207,9 +207,19 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
       analysisData = { additional_notes: rawAnalysis };
     }
 
+    // If product images are present AND product analysis hasn't been done yet,
+    // keep status in an "analyzing" state so the UI never flashes the Q&A panel
+    // between the two analysis steps. If product analysis is already complete
+    // (or there are no product images), go straight to "qa".
+    const needsProductAnalysis =
+      session.productImageUrls &&
+      session.productImageUrls.length > 0 &&
+      !session.productAnalysis;
+    const nextStatus = needsProductAnalysis ? "analyzing_products" : "qa";
+
     await db
       .update(sessionsTable)
-      .set({ referenceAnalysis: JSON.stringify(analysisData), status: "qa", updatedAt: new Date() })
+      .set({ referenceAnalysis: JSON.stringify(analysisData), status: nextStatus, updatedAt: new Date() })
       .where(eq(sessionsTable.id, session.id));
 
     res.json({ analysis: analysisData, sessionId: session.id });
