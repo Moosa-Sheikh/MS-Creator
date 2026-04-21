@@ -246,7 +246,8 @@ function WizardStep({
             (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
             "Failed to analyze the reference image. Check your model configuration in Settings.";
           toast({ title: "Image analysis failed", description: msg, variant: "destructive" });
-          await updateSession.mutateAsync({ id: sessionId, data: { status: "draft" } });
+          await updateSession.mutateAsync({ id: sessionId, data: { status: "failed" } });
+          queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
           return;
         }
       } else {
@@ -261,7 +262,8 @@ function WizardStep({
             (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
             "Failed to analyse product photos. Check your model configuration in Settings.";
           toast({ title: "Product analysis failed", description: msg, variant: "destructive" });
-          await updateSession.mutateAsync({ id: sessionId, data: { status: "draft" } });
+          await updateSession.mutateAsync({ id: sessionId, data: { status: "failed" } });
+          queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
           return;
         }
       }
@@ -1882,6 +1884,127 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
   );
 }
 
+function FailedState({ session }: { session: Session }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const sessionId = session.id;
+
+  const analyzeRef = useAnalyzeReferenceImage();
+  const analyzeProducts = useAnalyzeProducts();
+  const updateSession = useUpdateSession();
+
+  const referenceAnalysisDone = !!session.referenceAnalysis;
+  const productAnalysisDone = !!session.productAnalysis;
+  const hasProductImages = !!(session.productImageUrls as string[] | null)?.length;
+
+  const needsReferenceRetry = session.optionType === "B" && !referenceAnalysisDone;
+  const needsProductRetry = hasProductImages && !productAnalysisDone;
+
+  const failedStepLabel = needsReferenceRetry
+    ? "Reference Image Analysis"
+    : needsProductRetry
+    ? "Product Photo Analysis"
+    : "Analysis";
+
+  const isRetrying = analyzeRef.isPending || analyzeProducts.isPending || updateSession.isPending;
+
+  const handleRetry = async () => {
+    if (needsReferenceRetry) {
+      await updateSession.mutateAsync({ id: sessionId, data: { status: "analyzing" } });
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+      try {
+        await analyzeRef.mutateAsync({ id: sessionId });
+      } catch (err: unknown) {
+        const msg =
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          "Failed to analyze the reference image. Check your model configuration in Settings.";
+        toast({ title: "Reference analysis failed", description: msg, variant: "destructive" });
+        await updateSession.mutateAsync({ id: sessionId, data: { status: "failed" } });
+        queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+        return;
+      }
+      if (hasProductImages && !productAnalysisDone) {
+        try {
+          await analyzeProducts.mutateAsync({ id: sessionId });
+        } catch (err: unknown) {
+          const msg =
+            (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            "Failed to analyse product photos. Check your model configuration in Settings.";
+          toast({ title: "Product analysis failed", description: msg, variant: "destructive" });
+          await updateSession.mutateAsync({ id: sessionId, data: { status: "failed" } });
+        }
+      }
+    } else if (needsProductRetry) {
+      await updateSession.mutateAsync({ id: sessionId, data: { status: "analyzing_products" } });
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+      try {
+        await analyzeProducts.mutateAsync({ id: sessionId });
+      } catch (err: unknown) {
+        const msg =
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          "Failed to analyse product photos. Check your model configuration in Settings.";
+        toast({ title: "Product analysis failed", description: msg, variant: "destructive" });
+        await updateSession.mutateAsync({ id: sessionId, data: { status: "failed" } });
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+  };
+
+  const isAnalysisFailure = needsReferenceRetry || needsProductRetry;
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-5 py-24 text-center max-w-md mx-auto">
+      <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
+        <AlertCircle className="w-8 h-8 text-destructive" />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">
+          {isAnalysisFailure ? "Analysis Failed" : "Something Went Wrong"}
+        </h2>
+        {isAnalysisFailure ? (
+          <>
+            <p className="text-muted-foreground text-sm">
+              The <span className="font-medium text-foreground">{failedStepLabel}</span> step encountered an error.
+            </p>
+            {referenceAnalysisDone && (
+              <p className="text-xs text-muted-foreground bg-muted/50 border border-border/40 rounded-lg px-3 py-2">
+                Reference image analysis completed successfully — it will be preserved on retry.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Make sure your active model supports vision in Settings, then retry below.
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            An unexpected error occurred. Check your model configuration in Settings, then go back to the product and start a new session.
+          </p>
+        )}
+      </div>
+      <div className="flex flex-col gap-2 w-full max-w-xs">
+        {isAnalysisFailure && (
+          <Button onClick={handleRetry} disabled={isRetrying} className="w-full">
+            {isRetrying ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            {isRetrying ? "Retrying…" : `Retry ${failedStepLabel}`}
+          </Button>
+        )}
+        <div className="flex gap-2 justify-center">
+          <Link href="/settings">
+            <Button variant="outline" size="sm">Open Settings</Button>
+          </Link>
+          <Link href={`/products/${session.productId}`}>
+            <Button variant="ghost" size="sm">Back to Product</Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const [step, setStep] = useState(1);
@@ -1979,25 +2102,7 @@ export default function SessionPage() {
       case "completed":
         return <ResultsGallery session={session} product={product ?? null} />;
       case "failed":
-        return (
-          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center max-w-sm mx-auto">
-            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
-              <X className="w-8 h-8 text-destructive" />
-            </div>
-            <h2 className="text-xl font-semibold">Something went wrong</h2>
-            <p className="text-muted-foreground text-sm">
-              Check your active model's capabilities in Settings — make sure it supports vision if you're using a reference image.
-            </p>
-            <div className="flex gap-2">
-              <Link href="/settings">
-                <Button variant="default" size="sm">Open Settings</Button>
-              </Link>
-              <Link href={`/products/${session.productId}`}>
-                <Button variant="outline" size="sm">Back to Product</Button>
-              </Link>
-            </div>
-          </div>
-        );
+        return <FailedState session={session} />;
       default:
         return null;
     }
