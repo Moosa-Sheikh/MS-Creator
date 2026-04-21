@@ -107,3 +107,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 APP_PASSWORD = "Chikky Don786"
+DEFAULT_OBJECT_STORAGE_BUCKET_ID = "replit-objstore-428a05af-3f42-4aa3-b59d-ae2479d6d12f"
+PUBLIC_OBJECT_SEARCH_PATHS = "/replit-objstore-428a05af-3f42-4aa3-b59d-ae2479d6d12f/public"
+PRIVATE_OBJECT_DIR = "/replit-objstore-428a05af-3f42-4aa3-b59d-ae2479d6d12f/.private"
