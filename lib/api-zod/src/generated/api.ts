@@ -511,6 +511,7 @@ export const GenerateImagesBody = zod.object({
   falModelId: zod.string(),
   falParams: zod.record(zod.string(), zod.unknown()).optional(),
   imageCount: zod.number().nullish(),
+  imageIndex: zod.number().nullish(),
 });
 
 export const GenerateImagesResponse = zod.object({

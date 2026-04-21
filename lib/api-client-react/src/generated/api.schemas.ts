@@ -234,6 +234,8 @@ export interface GenerateImagesBody {
   falParams?: GenerateImagesBodyFalParams;
   /** @nullable */
   imageCount?: number | null;
+  /** @nullable */
+  imageIndex?: number | null;
 }
 
 export interface GenerationResult {

@@ -259,6 +259,66 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
 
   const timeoutSecs = settings.falPollingTimeoutSecs ?? 60;
 
+  const storageService = new ObjectStorageService();
+
+  // For M2 sessions, use per-image variation prompts if available
+  const variationPrompts = (session.variationPrompts ?? []) as string[];
+
+  // ── Per-image regeneration (M2 only) ─────────────────────────────────────
+  // When imageIndex is provided, only regenerate that one image — do not flip
+  // the whole session to "generating" so other images remain visible.
+  if (parsed.data.imageIndex != null && session.outputType === "M2") {
+    const imageIndex = parsed.data.imageIndex;
+
+    // Validate imageIndex: must be a non-negative integer within the existing image array
+    const existingCount = ((session.generatedImageUrls ?? []) as string[]).length;
+    if (!Number.isInteger(imageIndex) || imageIndex < 0 || imageIndex >= existingCount) {
+      res.status(400).json({
+        error: `imageIndex must be an integer between 0 and ${existingCount - 1} (got ${imageIndex})`,
+      });
+      return;
+    }
+
+    const imagePrompt = variationPrompts[imageIndex] ?? prompt;
+
+    try {
+      const urls = await generateSingleImage(
+        imagePrompt,
+        falModel,
+        { productImageUrls: session.productImageUrls },
+        (parsed.data.falParams ?? {}) as Record<string, unknown>,
+        settings.falApiKey,
+        timeoutSecs,
+        storageService,
+        req.log
+      );
+
+      const newUrl = urls[0];
+      if (!newUrl) throw new Error("No image URL returned from fal.io");
+
+      // Re-read the latest image URLs from DB right before writing to avoid
+      // overwriting concurrent per-image regenerations on other indices.
+      const [latestSession] = await db
+        .select({ generatedImageUrls: sessionsTable.generatedImageUrls })
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, session.id));
+      const latestUrls = ((latestSession?.generatedImageUrls ?? []) as string[]).slice();
+      latestUrls[imageIndex] = newUrl;
+
+      await db
+        .update(sessionsTable)
+        .set({ generatedImageUrls: latestUrls, status: "completed", updatedAt: new Date() })
+        .where(eq(sessionsTable.id, session.id));
+
+      res.json({ imageUrls: latestUrls, sessionId: session.id });
+    } catch (err: unknown) {
+      req.log.error({ err, imageIndex }, "Per-image regeneration failed");
+      res.status(500).json({ error: err instanceof Error ? err.message : "Regeneration failed" });
+    }
+    return;
+  }
+
+  // ── Full generation ───────────────────────────────────────────────────────
   await db
     .update(sessionsTable)
     .set({ status: "generating", falModelId: parsed.data.falModelId, falParams: parsed.data.falParams ?? {}, updatedAt: new Date() })
@@ -267,10 +327,6 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
   const imageCount = session.outputType === "M2" ? (parsed.data.imageCount ?? session.imageCount ?? 2) : 1;
   const allImageUrls: string[] = [];
   const errors: string[] = [];
-  const storageService = new ObjectStorageService();
-
-  // For M2 sessions, use per-image variation prompts if available
-  const variationPrompts = (session.variationPrompts ?? []) as string[];
 
   try {
     for (let i = 0; i < imageCount; i++) {

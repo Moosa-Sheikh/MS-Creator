@@ -1568,11 +1568,15 @@ function ImageCard({
   index,
   onView,
   large,
+  onRegenerate,
+  isRegenerating,
 }: {
   url: string;
   index: number;
   onView: () => void;
   large?: boolean;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
 }) {
   const src = resolveImageUrl(url);
   const filename = `mockup-${index + 1}.png`;
@@ -1585,8 +1589,16 @@ function ImageCard({
         large ? "aspect-[4/3] max-w-2xl mx-auto w-full" : "aspect-square"
       }`}
     >
+      {/* Per-image regenerating overlay */}
+      {isRegenerating && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/60 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-white" />
+          <span className="text-xs text-white/90 font-medium">Regenerating…</span>
+        </div>
+      )}
+
       {/* Loading skeleton */}
-      {!loaded && !errored && (
+      {!loaded && !errored && !isRegenerating && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/50" />
           <span className="text-xs text-muted-foreground">Loading image…</span>
@@ -1594,7 +1606,7 @@ function ImageCard({
       )}
 
       {/* Error state */}
-      {errored && (
+      {errored && !isRegenerating && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted px-6 text-center">
           <AlertCircle className="w-8 h-8 text-destructive/70" />
           <p className="text-xs text-muted-foreground font-medium">Image failed to load</p>
@@ -1615,13 +1627,13 @@ function ImageCard({
         alt={`Generated mockup ${index + 1}`}
         className={`w-full h-full object-contain cursor-pointer transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
         onClick={onView}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => { setLoaded(true); setErrored(false); }}
         onError={() => { setLoaded(false); setErrored(true); }}
       />
 
-      {/* Hover overlay — only shown once image is loaded */}
-      {loaded && (
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+      {/* Hover overlay — only shown once image is loaded and not regenerating */}
+      {loaded && !isRegenerating && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 flex-wrap p-2">
           <button
             onClick={onView}
             className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
@@ -1640,6 +1652,15 @@ function ImageCard({
             <Download className="w-3.5 h-3.5" />
             Download
           </a>
+          {onRegenerate && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRegenerate(); }}
+              className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Regenerate this one
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1700,8 +1721,10 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
   const [saveOpen, setSaveOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
+  const [regeneratingIndices, setRegeneratingIndices] = useState<Set<number>>(new Set());
 
   const updateSession = useUpdateSession();
+  const generateImages = useGenerateImages();
   const createTemplate = useCreateTemplate({
     mutation: {
       onSuccess: () => {
@@ -1725,6 +1748,33 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
       { id: session.id, data: { status: status as never } },
       { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(session.id) }) }
     );
+  };
+
+  const handleRegenerateOne = async (imageIndex: number) => {
+    if (!session.falModelId) {
+      toast({ title: "No model configured for this session", variant: "destructive" });
+      return;
+    }
+    setRegeneratingIndices((prev) => new Set([...prev, imageIndex]));
+    try {
+      await generateImages.mutateAsync({
+        id: session.id,
+        data: {
+          falModelId: session.falModelId,
+          falParams: (session.falParams as Record<string, unknown>) ?? undefined,
+          imageIndex,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(session.id) });
+    } catch {
+      toast({ title: "Regeneration failed. Check your model config and API keys.", variant: "destructive" });
+    } finally {
+      setRegeneratingIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(imageIndex);
+        return next;
+      });
+    }
   };
 
   return (
@@ -1770,7 +1820,14 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
       ) : isM2 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {images.map((url, idx) => (
-            <ImageCard key={idx} url={url} index={idx} onView={() => setFullscreenImg(url)} />
+            <ImageCard
+              key={idx}
+              url={url}
+              index={idx}
+              onView={() => setFullscreenImg(url)}
+              onRegenerate={() => handleRegenerateOne(idx)}
+              isRegenerating={regeneratingIndices.has(idx)}
+            />
           ))}
         </div>
       ) : (

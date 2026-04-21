@@ -1137,6 +1137,9 @@ components:
           additionalProperties: true
         imageCount:
           type: ["integer", "null"]
+        imageIndex:
+          type: ["integer", "null"]
+          description: "When set, regenerate only the image at this index (M2 sessions only). The other images are untouched."
       required:
         - falModelId
 
