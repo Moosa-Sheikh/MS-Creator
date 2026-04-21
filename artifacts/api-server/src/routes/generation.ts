@@ -279,7 +279,7 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
       return;
     }
 
-    const imagePrompt = variationPrompts[imageIndex] ?? prompt;
+    const imagePrompt = parsed.data.promptOverride ?? variationPrompts[imageIndex] ?? prompt;
 
     try {
       const urls = await generateSingleImage(

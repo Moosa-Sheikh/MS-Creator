@@ -14,4 +14,6 @@ export interface GenerateImagesBody {
   imageCount?: number | null;
   /** @nullable */
   imageIndex?: number | null;
+  /** @nullable */
+  promptOverride?: string | null;
 }

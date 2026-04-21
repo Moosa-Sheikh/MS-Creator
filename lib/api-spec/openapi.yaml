@@ -1140,6 +1140,9 @@ components:
         imageIndex:
           type: ["integer", "null"]
           description: "When set, regenerate only the image at this index (M2 sessions only). The other images are untouched."
+        promptOverride:
+          type: ["string", "null"]
+          description: "One-time prompt override for per-image regeneration. Replaces the stored variation prompt for this request only (not persisted)."
       required:
         - falModelId
 

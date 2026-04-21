@@ -1724,6 +1724,7 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
   const [templateName, setTemplateName] = useState("");
   const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
   const [regeneratingIndices, setRegeneratingIndices] = useState<Set<number>>(new Set());
+  const [promptEditState, setPromptEditState] = useState<{ imageIndex: number; prompt: string } | null>(null);
 
   const updateSession = useUpdateSession();
   const generateImages = useGenerateImages();
@@ -1744,6 +1745,7 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
   const images: string[] = (session.generatedImageUrls as string[]) || [];
   const isM2 = session.outputType === "M2";
   const prompt = session.enhancedPrompt || session.finalPrompt || "";
+  const variationPrompts = (session.variationPrompts ?? []) as string[];
 
   const goBack = (status: string) => {
     updateSession.mutate(
@@ -1752,11 +1754,17 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
     );
   };
 
-  const handleRegenerateOne = async (imageIndex: number) => {
+  const openPromptEditor = (imageIndex: number) => {
+    const imagePrompt = variationPrompts[imageIndex] ?? prompt;
+    setPromptEditState({ imageIndex, prompt: imagePrompt });
+  };
+
+  const handleRegenerateOne = async (imageIndex: number, promptOverride?: string) => {
     if (!session.falModelId) {
       toast({ title: "No model configured for this session", variant: "destructive" });
       return;
     }
+    setPromptEditState(null);
     setRegeneratingIndices((prev) => new Set([...prev, imageIndex]));
     try {
       await generateImages.mutateAsync({
@@ -1765,6 +1773,7 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
           falModelId: session.falModelId,
           falParams: (session.falParams as Record<string, unknown>) ?? undefined,
           imageIndex,
+          promptOverride: promptOverride ?? null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(session.id) });
@@ -1827,7 +1836,7 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
               url={url}
               index={idx}
               onView={() => setFullscreenImg(url)}
-              onRegenerate={() => handleRegenerateOne(idx)}
+              onRegenerate={() => openPromptEditor(idx)}
               isRegenerating={regeneratingIndices.has(idx)}
             />
           ))}
@@ -1845,6 +1854,43 @@ function ResultsGallery({ session, product }: { session: Session; product: Produ
           <p className="text-xs font-mono text-foreground leading-relaxed">{prompt}</p>
         </div>
       )}
+
+      {/* Per-image prompt editor dialog */}
+      <Dialog open={!!promptEditState} onOpenChange={(open) => { if (!open) setPromptEditState(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Prompt for Image {promptEditState ? promptEditState.imageIndex + 1 : ""}</DialogTitle>
+            <DialogDescription>
+              Tweak the prompt for this image before regenerating. Changes apply to this regeneration only and are not saved permanently.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Textarea
+              autoFocus
+              rows={6}
+              className="font-mono text-xs resize-none"
+              value={promptEditState?.prompt ?? ""}
+              onChange={(e) => setPromptEditState((prev) => prev ? { ...prev, prompt: e.target.value } : null)}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setPromptEditState(null)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={!promptEditState?.prompt.trim()}
+                onClick={() => {
+                  if (promptEditState) {
+                    void handleRegenerateOne(promptEditState.imageIndex, promptEditState.prompt.trim());
+                  }
+                }}
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Regenerate
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Save template dialog */}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
