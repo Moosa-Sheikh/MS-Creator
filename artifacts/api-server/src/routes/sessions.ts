@@ -317,15 +317,9 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
       analysisData = { notes: rawAnalysis };
     }
 
-    // If this is an Option B session and reference analysis hasn't been done yet,
-    // set status to "analyzing_vision" so the client knows to also run analyze-reference.
-    // Otherwise go straight to "qa".
-    const needsReferenceAnalysis = session.optionType === "B" && session.referenceImageUrl && !session.referenceAnalysis;
-    const nextStatus = needsReferenceAnalysis ? "analyzing_vision" : "qa";
-
     await db
       .update(sessionsTable)
-      .set({ productAnalysis: JSON.stringify(analysisData), status: nextStatus, updatedAt: new Date() })
+      .set({ productAnalysis: JSON.stringify(analysisData), status: "qa", updatedAt: new Date() })
       .where(eq(sessionsTable.id, session.id));
 
     res.json({ analysis: analysisData, sessionId: session.id });
