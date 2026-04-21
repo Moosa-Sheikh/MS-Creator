@@ -24,13 +24,13 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PORT=8081 BASE_PATH=/ pnpm --filter @workspace/mockup-tool run dev & PORT=8080 pnpm --filter @workspace/api-server run dev & wait"
-waitForPort = 8081
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "fuser -k 8080/tcp 8081/tcp 2>/dev/null; sleep 1; PORT=8081 BASE_PATH=/ pnpm --filter @workspace/mockup-tool run dev & PORT=8080 pnpm --filter @workspace/api-server run dev & wait"
+waitForPort = 8081
 
 [agent]
 stack = "PNPM_WORKSPACE"
