@@ -166,10 +166,6 @@ async function generateSingleImage(
   prompt: string,
   falModel: { endpoint: string; defaultValues: unknown; paramsSchema: unknown },
   session: {
-    optionType?: string | null;
-    referenceStyle?: string | null;
-    referenceImageUrl?: string | null;
-    similarityLevel?: number | null;
     productImageUrls?: string[] | null;
   },
   userParams: Record<string, unknown>,
@@ -178,17 +174,12 @@ async function generateSingleImage(
   storageService: ObjectStorageService,
   log: { error: (obj: unknown, msg?: string) => void; warn: (obj: unknown, msg?: string) => void }
 ): Promise<string[]> {
-  // Build the image_urls array — product photos are the primary inputs
+  // Build the image_urls array — only product photos go to fal.io.
+  // The reference image stays on the LLM side only (used for style analysis, not passed to the edit model).
   const imageUrls: string[] = [];
   for (const p of session.productImageUrls ?? []) {
     const url = await objectPathToPublicUrl(p, storageService, log);
     imageUrls.push(url);
-  }
-
-  // For Option B (reference-based), include the reference image too
-  if (session.optionType === "B" && session.referenceImageUrl) {
-    const refUrl = await objectPathToPublicUrl(session.referenceImageUrl, storageService, log);
-    imageUrls.push(refUrl);
   }
 
   const requestBody: Record<string, unknown> = {
@@ -200,11 +191,6 @@ async function generateSingleImage(
   // Always pass image_urls if we have product images
   if (imageUrls.length > 0) {
     requestBody.image_urls = imageUrls;
-  }
-
-  // For SAME-style flows, pass strength (how much to preserve from input)
-  if (session.optionType === "B" && session.referenceStyle === "SAME" && session.similarityLevel != null) {
-    requestBody.strength = 1 - session.similarityLevel / 100;
   }
 
   const response = await fetch(falModel.endpoint, {
@@ -283,13 +269,21 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
   const errors: string[] = [];
   const storageService = new ObjectStorageService();
 
+  // For M2 sessions, use per-image variation prompts if available
+  const variationPrompts = (session.variationPrompts ?? []) as string[];
+
   try {
     for (let i = 0; i < imageCount; i++) {
+      // Use variation prompt for this specific image index if available
+      const imagePrompt = (session.outputType === "M2" && variationPrompts[i])
+        ? variationPrompts[i]
+        : prompt;
+
       try {
         const urls = await generateSingleImage(
-          prompt,
+          imagePrompt,
           falModel,
-          session,
+          { productImageUrls: session.productImageUrls },
           (parsed.data.falParams ?? {}) as Record<string, unknown>,
           settings.falApiKey,
           timeoutSecs,

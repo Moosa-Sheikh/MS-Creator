@@ -325,6 +325,18 @@ export const AnalyzeReferenceImageResponse = zod.object({
 });
 
 /**
+ * @summary Analyze product photos of a session using AI vision
+ */
+export const AnalyzeProductsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AnalyzeProductsResponse = zod.object({
+  analysis: zod.record(zod.string()),
+  sessionId: zod.string(),
+});
+
+/**
  * @summary Get the next Q&A question from the AI
  */
 export const GetNextQuestionParams = zod.object({

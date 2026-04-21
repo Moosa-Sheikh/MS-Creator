@@ -46,6 +46,12 @@ export interface Session {
   finalPrompt: string | null;
   /** @nullable */
   enhancedPrompt: string | null;
+  /** JSON string: { items, colors, materials, style, arrangement, notes }
+   * @nullable */
+  productAnalysis: string | null;
+  /** Per-image prompts for M2 sessions (one per listing image)
+   * @nullable */
+  variationPrompts: string[] | null;
   /** @nullable */
   falModelId: string | null;
   falParams: SessionFalParams;

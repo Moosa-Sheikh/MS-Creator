@@ -18,8 +18,10 @@ export const sessionsTable = pgTable("sessions", {
   enhancedPrompt: text("enhanced_prompt"),
   falModelId: uuid("fal_model_id"),
   falParams: jsonb("fal_params").notNull().default({}),
+  productAnalysis: text("product_analysis"),
+  variationPrompts: text("variation_prompts").array(),
   generatedImageUrls: text("generated_image_urls").array().notNull().default([]),
-  status: text("status").notNull().default("draft"), // draft | prompt_ready | generating | completed | failed
+  status: text("status").notNull().default("draft"), // draft | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed
   flowId: text("flow_id"), // F1-F6 — computed from optionType + referenceStyle + templateInspirationId
   templateInspirationId: uuid("template_inspiration_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

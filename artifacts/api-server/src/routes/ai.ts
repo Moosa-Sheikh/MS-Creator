@@ -85,18 +85,42 @@ ${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : "
     }
   }
 
+  // Format product analysis as readable section
+  let productAnalysisSection = "";
+  if (session.productAnalysis) {
+    try {
+      const pa = JSON.parse(session.productAnalysis) as Record<string, string>;
+      const labelMap: Record<string, string> = {
+        items: "Items Visible",
+        colors: "Colors & Palette",
+        materials: "Materials & Textures",
+        style: "Product Style",
+        arrangement: "Current Photo Composition",
+        notes: "Additional Notes",
+      };
+      const lines = Object.entries(pa)
+        .filter(([, v]) => v && v.trim())
+        .map(([k, v]) => `  • ${labelMap[k] ?? k}: ${v}`);
+      if (lines.length > 0) {
+        productAnalysisSection = `\n━━━ PRODUCT VISUAL ANALYSIS (from examining seller's photos) ━━━\n${lines.join("\n")}`;
+      }
+    } catch {
+      productAnalysisSection = `\nProduct analysis: ${session.productAnalysis}`;
+    }
+  }
+
   const userPrompt = `━━━ PRODUCT ━━━
 Name: ${product?.name ?? "Unknown"}
 Description: ${product?.description ?? "(no description provided)"}
 Flow: ${flowId} — ${FLOWS[flowId]?.name ?? flowId}
 Output: ${session.outputType}${session.outputType === "M2" ? ` (${session.imageCount} images — plan variation across them)` : ""}
-${session.referenceStyle ? `Reference style: ${session.referenceStyle}` : ""}${referenceSection}
+${session.referenceStyle ? `Reference style: ${session.referenceStyle}` : ""}${productAnalysisSection}${referenceSection}
 ${templateContext ? `\n━━━ TEMPLATE CONTEXT ━━━\n${templateContext}` : ""}
 ━━━ Q&A HISTORY (${questionIndex} questions so far) ━━━
 ${questionIndex === 0 ? "(No questions asked yet — this is the first question)" : qaAnswers.map((a, i) => `Q${i + 1}: ${a.question}\nA${i + 1}: ${a.answer}`).join("\n\n")}
 
 ━━━ INSTRUCTION ━━━
-${questionIndex >= 6 ? "You have gathered substantial information. Generate the final prompt now if you have enough clarity, or ask one last targeted question about a gap that remains." : `Ask question #${questionIndex + 1}. Use the reference analysis and product context above to make this question SPECIFIC to this product and situation — not generic.`}`;
+${questionIndex >= 6 ? "You have gathered substantial information. Generate the final prompt now if you have enough clarity, or ask one last targeted question about a gap that remains." : `Ask question #${questionIndex + 1}. Use the product analysis and reference context above to make this question SPECIFIC to this product — not generic.`}`;
 
   try {
     const rawResponse = await callActiveLlm([
@@ -110,12 +134,22 @@ ${questionIndex >= 6 ? "You have gathered substantial information. Generate the 
       aiSuggestion?: string;
       questionIndex?: number;
       finalPrompt?: string;
+      variationPrompts?: string[];
     };
 
     if (parsed.done && parsed.finalPrompt) {
+      const updateData: Record<string, unknown> = {
+        finalPrompt: parsed.finalPrompt,
+        status: "prompt_ready",
+        updatedAt: new Date(),
+      };
+      // For M2 sessions, store per-image variation prompts if the LLM returned them
+      if (session.outputType === "M2" && parsed.variationPrompts && parsed.variationPrompts.length > 0) {
+        updateData.variationPrompts = parsed.variationPrompts;
+      }
       await db
         .update(sessionsTable)
-        .set({ finalPrompt: parsed.finalPrompt, status: "prompt_ready", updatedAt: new Date() })
+        .set(updateData)
         .where(eq(sessionsTable.id, session.id));
     }
 
@@ -175,11 +209,13 @@ router.post("/sessions/:id/prompt/enhance", async (req, res): Promise<void> => {
     const response = await callActiveLlm([
       {
         role: "user",
-        content: `You are an expert AI image prompt engineer. Analyze this image generation prompt and find vague, non-visual words that should be replaced with specific, detailed descriptions.
+        content: `You are an expert AI image prompt engineer for Etsy product mockups. This prompt goes to an image-EDIT model that already has the product photos — it arranges and styles them, not creates them from scratch.
+
+Analyze this arrangement prompt and find vague, non-visual words that should be replaced with specific, detailed descriptions about scene, lighting, composition, and styling.
 
 Prompt: "${prompt}"
 
-Find words/phrases like "beautiful", "cozy", "stylish", "nice", "good", "professional", "elegant", etc. and suggest specific visual replacements.
+Find words/phrases like "beautiful", "cozy", "stylish", "nice", "good", "professional", "elegant", etc. and suggest specific visual replacements. Focus on making the arrangement, lighting, and scene instructions more precise.
 
 Return JSON:
 {
@@ -187,7 +223,7 @@ Return JSON:
     {
       "original": "exact text to replace",
       "replacement": "specific visual description",
-      "reason": "why this is better"
+      "reason": "why this is better for a mockup arrangement prompt"
     }
   ]
 }
@@ -230,13 +266,13 @@ router.post("/sessions/:id/prompt/revise", async (req, res): Promise<void> => {
     const response = await callActiveLlm([
       {
         role: "user",
-        content: `You are an expert AI image prompt engineer for Etsy product mockups.
+        content: `You are an expert AI image prompt engineer for Etsy product mockups. This prompt goes to an image-EDIT model that already has the product photos — it arranges and styles them, it does NOT generate a product from scratch.
 
-Current prompt: "${prompt}"
+Current arrangement prompt: "${prompt}"
 
 User instruction: "${parsed.data.instruction}"
 
-Revise ONLY the relevant part of the prompt based on the instruction. Keep everything else the same. Return the full revised prompt.
+Revise ONLY the relevant part of the prompt based on the instruction. Keep everything else the same. The revised prompt should still describe HOW to arrange and style the provided product images — not what the product looks like. Return the full revised prompt.
 
 Return JSON: { "prompt": "..." }`,
       },
@@ -264,22 +300,39 @@ router.post("/sessions/:id/prompt/rewrite", async (req, res): Promise<void> => {
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, session.productId));
   const qaAnswers = (session.qaAnswers as QAAnswer[]) || [];
 
+  // Format product analysis for context
+  let productAnalysisText = "";
+  if (session.productAnalysis) {
+    try {
+      const pa = JSON.parse(session.productAnalysis) as Record<string, string>;
+      productAnalysisText = Object.entries(pa)
+        .filter(([, v]) => v && v.trim())
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join("\n");
+    } catch {
+      productAnalysisText = session.productAnalysis;
+    }
+  }
+
   try {
     const response = await callActiveLlm([
       {
         role: "user",
         content: `You are an expert Etsy mockup photographer and AI image prompt engineer.
 
-Write a completely new, detailed image generation prompt for this product mockup.
+IMPORTANT: This prompt will be sent to an IMAGE-EDIT model (fal.io) that ALREADY HAS the seller's product photos as input images. The model will edit/style those images — it does NOT generate a product from scratch.
+
+Write an arrangement-based prompt that describes HOW to style and present the already-provided product images.
+- Begin with: "Using the provided product image(s)..."
+- Describe: scene/setting, background, lighting, composition, props, styling mood
+- NEVER describe what the product looks like — the model already sees it
+- Be specific and visual
 
 Product: ${product?.name ?? "Unknown"} — ${product?.description ?? ""}
-Option: ${session.optionType}
-Output: ${session.outputType}${session.optionType === "B" && session.referenceAnalysis ? `\nReference analysis: ${session.referenceAnalysis}` : ""}
+Output: ${session.outputType}${productAnalysisText ? `\n\nProduct visual analysis:\n${productAnalysisText}` : ""}${session.referenceAnalysis ? `\n\nReference analysis: ${session.referenceAnalysis}` : ""}
 
 Q&A context:
 ${qaAnswers.map((a) => `Q: ${a.question}\nA: ${a.answer}`).join("\n\n")}
-
-Write a comprehensive, highly visual prompt that an AI image model can use to generate a stunning Etsy mockup photo. Be specific about lighting, composition, background, mood, style, and visual details.
 
 Return JSON: { "prompt": "..." }`,
       },
