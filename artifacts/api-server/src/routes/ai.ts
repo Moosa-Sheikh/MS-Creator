@@ -143,9 +143,26 @@ ${questionIndex >= 6 ? "You have gathered substantial information. Generate the 
         status: "prompt_ready",
         updatedAt: new Date(),
       };
-      // For M2 sessions, store per-image variation prompts if the LLM returned them
-      if (session.outputType === "M2" && parsed.variationPrompts && parsed.variationPrompts.length > 0) {
-        updateData.variationPrompts = parsed.variationPrompts;
+      // For M2 sessions, ensure variationPrompts has one entry per requested image
+      if (session.outputType === "M2") {
+        const imageCount = session.imageCount ?? 2;
+        let prompts: string[] = parsed.variationPrompts ?? [];
+        // Synthesise missing variation prompts from the base finalPrompt with angle suffixes
+        const angleSuffixes = [
+          "wide establishing shot of the full arrangement",
+          "close-up detail shot highlighting texture and material",
+          "45-degree angle showing product depth and context",
+          "overhead flat lay view of the arrangement",
+          "side profile shot with shallow depth of field",
+          "three-quarter angle view of the complete scene",
+          "tight crop focused on the product's key feature",
+          "slightly elevated angle with full background visible",
+        ];
+        while (prompts.length < imageCount) {
+          const suffix = angleSuffixes[prompts.length % angleSuffixes.length];
+          prompts.push(`${parsed.finalPrompt} Frame as a ${suffix}.`);
+        }
+        updateData.variationPrompts = prompts.slice(0, imageCount);
       }
       await db
         .update(sessionsTable)
