@@ -102,3 +102,8 @@ externalPort = 8099
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+APP_PASSWORD = "Chikky Don786"
