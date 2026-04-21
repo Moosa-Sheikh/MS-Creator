@@ -302,6 +302,25 @@ paths:
         "204":
           description: Deleted
 
+  /sessions/{id}/analyze-products:
+    post:
+      operationId: analyzeProducts
+      tags: [sessions]
+      summary: Analyze product photos of a session using AI vision
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductAnalysis"
+
   /sessions/{id}/analyze-reference:
     post:
       operationId: analyzeReferenceImage
@@ -857,6 +876,15 @@ components:
           type: ["string", "null"]
         enhancedPrompt:
           type: ["string", "null"]
+        productAnalysis:
+          type: ["string", "null"]
+          description: "JSON string: { items, colors, materials, style, arrangement, notes }"
+        variationPrompts:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: "Per-image prompts for M2 sessions (one per listing image)"
         falModelId:
           type: ["string", "null"]
         falParams:
@@ -868,7 +896,7 @@ components:
             type: string
         status:
           type: string
-          description: "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed"
+          description: "draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed"
         flowId:
           type: ["string", "null"]
           description: "F1-F6 — determined by optionType + referenceStyle + templateInspirationId"
@@ -892,6 +920,8 @@ components:
         - qaAnswers
         - finalPrompt
         - enhancedPrompt
+        - productAnalysis
+        - variationPrompts
         - falModelId
         - falParams
         - generatedImageUrls
@@ -986,6 +1016,19 @@ components:
           type: ["string", "null"]
         templateInspirationId:
           type: ["string", "null"]
+
+    ProductAnalysis:
+      type: object
+      properties:
+        analysis:
+          type: object
+          additionalProperties:
+            type: string
+        sessionId:
+          type: string
+      required:
+        - analysis
+        - sessionId
 
     ReferenceAnalysis:
       type: object

@@ -145,13 +145,15 @@ export const ListSessionsResponseItem = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
+  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
+  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
     .describe(
-      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+      "draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed",
     ),
   flowId: zod
     .string()
@@ -210,13 +212,15 @@ export const GetSessionResponse = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
+  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
+  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
     .describe(
-      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+      "draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed",
     ),
   flowId: zod
     .string()
@@ -286,13 +290,15 @@ export const UpdateSessionResponse = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
+  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
+  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
     .describe(
-      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+      "draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed",
     ),
   flowId: zod
     .string()
