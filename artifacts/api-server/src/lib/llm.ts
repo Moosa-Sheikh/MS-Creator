@@ -199,6 +199,30 @@ export function extractJson(text: string): string {
   return match[0];
 }
 
+/** Retry a transient-error-prone async call with exponential backoff */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1000,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      lastErr = err;
+      // Only retry on transient network errors (ECONNRESET, ECONNREFUSED, ETIMEDOUT, fetch aborts)
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|terminated|network|fetch failed|socket hang up/i.test(msg);
+      if (!isTransient || attempt === maxAttempts) break;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+      logger.warn({ attempt, delay, err }, `LLM call failed with transient error, retrying in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export async function callActiveLlm(messages: LlmMessage[]): Promise<string> {
   const [activeConfig] = await db
     .select()
@@ -218,16 +242,20 @@ export async function callActiveLlm(messages: LlmMessage[]): Promise<string> {
     ? [{ role: "system", content: sys }, ...messages]
     : messages;
 
-  switch (activeConfig.provider) {
-    case "openrouter":
-      return callOpenRouter(fullMessages, activeConfig, settings);
-    case "anthropic":
-      return callAnthropic(fullMessages, activeConfig, settings);
-    case "openai":
-      return callOpenAI(fullMessages, activeConfig, settings);
-    case "google":
-      return callGoogle(fullMessages, activeConfig, settings);
-    default:
-      throw new Error(`Unknown provider: ${activeConfig.provider}`);
-  }
+  const callProvider = () => {
+    switch (activeConfig.provider) {
+      case "openrouter":
+        return callOpenRouter(fullMessages, activeConfig, settings);
+      case "anthropic":
+        return callAnthropic(fullMessages, activeConfig, settings);
+      case "openai":
+        return callOpenAI(fullMessages, activeConfig, settings);
+      case "google":
+        return callGoogle(fullMessages, activeConfig, settings);
+      default:
+        throw new Error(`Unknown provider: ${activeConfig.provider}`);
+    }
+  };
+
+  return withRetry(callProvider);
 }

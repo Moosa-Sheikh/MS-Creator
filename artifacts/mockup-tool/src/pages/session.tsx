@@ -1473,39 +1473,73 @@ function ImageCard({
   large?: boolean;
 }) {
   const src = resolveImageUrl(url);
-  const filename = `mockup-${index + 1}.jpg`;
+  const filename = `mockup-${index + 1}.png`;
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+
   return (
     <div
       className={`group relative bg-muted rounded-xl overflow-hidden border border-border/50 ${
         large ? "aspect-[4/3] max-w-2xl mx-auto w-full" : "aspect-square"
       }`}
     >
+      {/* Loading skeleton */}
+      {!loaded && !errored && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/50" />
+          <span className="text-xs text-muted-foreground">Loading image…</span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {errored && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted px-6 text-center">
+          <AlertCircle className="w-8 h-8 text-destructive/70" />
+          <p className="text-xs text-muted-foreground font-medium">Image failed to load</p>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-primary underline underline-offset-2 break-all"
+          >
+            Open directly ↗
+          </a>
+        </div>
+      )}
+
+      {/* The actual image — always rendered so the browser can fetch it */}
       <img
         src={src}
         alt={`Generated mockup ${index + 1}`}
-        className="w-full h-full object-cover cursor-pointer"
+        className={`w-full h-full object-contain cursor-pointer transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
         onClick={onView}
+        onLoad={() => setLoaded(true)}
+        onError={() => { setLoaded(false); setErrored(true); }}
       />
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
-        <button
-          onClick={onView}
-          className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
-        >
-          <ImageIcon className="w-3.5 h-3.5" />
-          View Full
-        </button>
-        <a
-          href={src}
-          download={filename}
-          target="_blank"
-          rel="noreferrer"
-          className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Download className="w-3.5 h-3.5" />
-          Download
-        </a>
-      </div>
+
+      {/* Hover overlay — only shown once image is loaded */}
+      {loaded && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+          <button
+            onClick={onView}
+            className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            View Full
+          </button>
+          <a
+            href={src}
+            download={filename}
+            target="_blank"
+            rel="noreferrer"
+            className="bg-white/90 hover:bg-white rounded-xl px-3 py-2 text-xs font-medium text-gray-800 flex items-center gap-1.5 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </a>
+        </div>
+      )}
     </div>
   );
 }
