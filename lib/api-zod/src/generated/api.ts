@@ -145,8 +145,16 @@ export const ListSessionsResponseItem = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
-  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
-  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
+  productAnalysis: zod
+    .string()
+    .nullable()
+    .describe(
+      "JSON string: { items, colors, materials, style, arrangement, notes }",
+    ),
+  variationPrompts: zod
+    .array(zod.string())
+    .nullable()
+    .describe("Per-image prompts for M2 sessions (one per listing image)"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
@@ -212,8 +220,16 @@ export const GetSessionResponse = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
-  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
-  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
+  productAnalysis: zod
+    .string()
+    .nullable()
+    .describe(
+      "JSON string: { items, colors, materials, style, arrangement, notes }",
+    ),
+  variationPrompts: zod
+    .array(zod.string())
+    .nullable()
+    .describe("Per-image prompts for M2 sessions (one per listing image)"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
@@ -290,8 +306,16 @@ export const UpdateSessionResponse = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
-  productAnalysis: zod.string().nullable().describe("JSON string: { items, colors, materials, style, arrangement, notes }"),
-  variationPrompts: zod.array(zod.string()).nullable().describe("Per-image prompts for M2 sessions"),
+  productAnalysis: zod
+    .string()
+    .nullable()
+    .describe(
+      "JSON string: { items, colors, materials, style, arrangement, notes }",
+    ),
+  variationPrompts: zod
+    .array(zod.string())
+    .nullable()
+    .describe("Per-image prompts for M2 sessions (one per listing image)"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
@@ -319,6 +343,18 @@ export const DeleteSessionParams = zod.object({
 });
 
 /**
+ * @summary Analyze product photos of a session using AI vision
+ */
+export const AnalyzeProductsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AnalyzeProductsResponse = zod.object({
+  analysis: zod.record(zod.string(), zod.string()),
+  sessionId: zod.string(),
+});
+
+/**
  * @summary Analyze the reference image of a session using AI
  */
 export const AnalyzeReferenceImageParams = zod.object({
@@ -327,18 +363,6 @@ export const AnalyzeReferenceImageParams = zod.object({
 
 export const AnalyzeReferenceImageResponse = zod.object({
   analysis: zod.string(),
-  sessionId: zod.string(),
-});
-
-/**
- * @summary Analyze product photos of a session using AI vision
- */
-export const AnalyzeProductsParams = zod.object({
-  id: zod.coerce.string(),
-});
-
-export const AnalyzeProductsResponse = zod.object({
-  analysis: zod.record(zod.string()),
   sessionId: zod.string(),
 });
 
@@ -404,13 +428,23 @@ export const SubmitAnswerResponse = zod.object({
   ),
   finalPrompt: zod.string().nullable(),
   enhancedPrompt: zod.string().nullable(),
+  productAnalysis: zod
+    .string()
+    .nullable()
+    .describe(
+      "JSON string: { items, colors, materials, style, arrangement, notes }",
+    ),
+  variationPrompts: zod
+    .array(zod.string())
+    .nullable()
+    .describe("Per-image prompts for M2 sessions (one per listing image)"),
   falModelId: zod.string().nullable(),
   falParams: zod.record(zod.string(), zod.unknown()),
   generatedImageUrls: zod.array(zod.string()),
   status: zod
     .string()
     .describe(
-      "draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed",
+      "draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed",
     ),
   flowId: zod
     .string()

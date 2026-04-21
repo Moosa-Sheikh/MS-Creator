@@ -34,6 +34,7 @@ import type {
   LlmConfig,
   LoginBody,
   Product,
+  ProductAnalysis,
   ProductStats,
   QAQuestion,
   ReferenceAnalysis,
@@ -1318,6 +1319,90 @@ export const useDeleteSession = <
   TContext
 > => {
   return useMutation(getDeleteSessionMutationOptions(options));
+};
+
+/**
+ * @summary Analyze product photos of a session using AI vision
+ */
+export const getAnalyzeProductsUrl = (id: string) => {
+  return `/api/sessions/${id}/analyze-products`;
+};
+
+export const analyzeProducts = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ProductAnalysis> => {
+  return customFetch<ProductAnalysis>(getAnalyzeProductsUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAnalyzeProductsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeProducts>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof analyzeProducts>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["analyzeProducts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeProducts>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return analyzeProducts(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnalyzeProductsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof analyzeProducts>>
+>;
+
+export type AnalyzeProductsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Analyze product photos of a session using AI vision
+ */
+export const useAnalyzeProducts = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeProducts>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeProducts>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAnalyzeProductsMutationOptions(options));
 };
 
 /**

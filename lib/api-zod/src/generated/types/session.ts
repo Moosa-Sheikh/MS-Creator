@@ -46,17 +46,18 @@ export interface Session {
   finalPrompt: string | null;
   /** @nullable */
   enhancedPrompt: string | null;
-  /** JSON string: { items, colors, materials, style, arrangement, notes }
-   * @nullable */
+  /**
+   * JSON string: { items, colors, materials, style, arrangement, notes }
+   * @nullable
+   */
   productAnalysis: string | null;
-  /** Per-image prompts for M2 sessions (one per listing image)
-   * @nullable */
+  /** Per-image prompts for M2 sessions (one per listing image) */
   variationPrompts: string[] | null;
   /** @nullable */
   falModelId: string | null;
   falParams: SessionFalParams;
   generatedImageUrls: string[];
-  /** draft | analyzing | analyzing_image | analyzing_vision | qa | prompt_ready | generating | completed | failed */
+  /** draft | analyzing | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed */
   status: string;
   /**
    * F1-F6 — determined by optionType + referenceStyle + templateInspirationId

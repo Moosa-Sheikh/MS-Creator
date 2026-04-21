@@ -20,6 +20,7 @@ import {
   useGetProduct,
   useUpdateSession,
   useAnalyzeReferenceImage,
+  useAnalyzeProducts,
   useGetNextQuestion,
   useSubmitAnswer,
   useEnhancePrompt,
@@ -200,6 +201,7 @@ function WizardStep({
   );
 
   const analyzeRef = useAnalyzeReferenceImage();
+  const analyzeProducts = useAnalyzeProducts();
 
   const updateSession = useUpdateSession({
     mutation: {
@@ -248,8 +250,22 @@ function WizardStep({
           return;
         }
       } else {
-        await updateSession.mutateAsync({ id: sessionId, data: { ...data, flowId, status: "qa" } });
+        await updateSession.mutateAsync({ id: sessionId, data: { ...data, flowId, status: "analyzing_products" } });
       }
+
+      if (productImageUrls.length > 0) {
+        try {
+          await analyzeProducts.mutateAsync({ id: sessionId });
+        } catch (err: unknown) {
+          const msg =
+            (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            "Failed to analyse product photos. Check your model configuration in Settings.";
+          toast({ title: "Product analysis failed", description: msg, variant: "destructive" });
+          await updateSession.mutateAsync({ id: sessionId, data: { status: "draft" } });
+          return;
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
     } else {
       updateSession.mutate({ id: sessionId, data });
@@ -452,11 +468,11 @@ function WizardStep({
         ) : (
           <div />
         )}
-        <Button onClick={saveAndNext} disabled={updateSession.isPending || analyzeRef.isPending}>
-          {updateSession.isPending || analyzeRef.isPending ? (
+        <Button onClick={saveAndNext} disabled={updateSession.isPending || analyzeRef.isPending || analyzeProducts.isPending}>
+          {updateSession.isPending || analyzeRef.isPending || analyzeProducts.isPending ? (
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : null}
-          {step === (optionType === "B" ? 5 : 4) ? (optionType === "B" ? "Analyze Reference" : "Start Q&A") : "Next"}
+          {step === (optionType === "B" ? 5 : 4) ? (optionType === "B" ? "Analyze & Continue" : "Analyse Photos") : "Next"}
           {step < (optionType === "B" ? 5 : 4) && <ChevronRight className="w-4 h-4 ml-1" />}
         </Button>
       </div>
@@ -499,6 +515,12 @@ const ANALYSIS_LABELS: Record<string, string> = {
   mood: "Mood & Aesthetic",
   photography_style: "Photography Style",
   additional_notes: "Additional Notes",
+  items: "Items Detected",
+  colors: "Colours",
+  materials: "Materials",
+  style: "Style",
+  arrangement: "Current Arrangement",
+  notes: "Additional Notes",
 };
 
 function QAPhase({ session, product }: { session: Session; product: Product | null }) {
@@ -515,7 +537,9 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
   const [qaError, setQaError] = useState<string | null>(null);
 
   const hasAnalysis = session.optionType === "B" && !!session.referenceAnalysis;
+  const hasProductAnalysis = !!session.productAnalysis;
   const [showIntroCard, setShowIntroCard] = useState(answers.length === 0);
+  const [showProductAnalysis, setShowProductAnalysis] = useState(answers.length === 0);
 
   const getNext = useGetNextQuestion({ mutation: { throwOnError: false } });
   const submitAnswer = useSubmitAnswer({ mutation: { throwOnError: false } });
@@ -599,6 +623,15 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
       analysisData = JSON.parse(session.referenceAnalysis as string) as Record<string, string>;
     } catch {
       analysisData = { additional_notes: String(session.referenceAnalysis) };
+    }
+  }
+
+  let productAnalysisData: Record<string, string> | null = null;
+  if (session.productAnalysis) {
+    try {
+      productAnalysisData = JSON.parse(session.productAnalysis as string) as Record<string, string>;
+    } catch {
+      productAnalysisData = { notes: String(session.productAnalysis) };
     }
   }
 
@@ -743,6 +776,42 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
                 </div>
               </div>
 
+              {/* Product analysis summary — always show when available */}
+              {hasProductAnalysis && productAnalysisData && (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between group"
+                    onClick={() => setShowProductAnalysis((v) => !v)}
+                  >
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">What AI sees in your photos</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {showProductAnalysis ? "The AI has analysed your product photos and will use this to guide the Q&A." : "Click to expand."}
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ml-3 ${showProductAnalysis ? "rotate-90" : ""}`}
+                    />
+                  </button>
+                  {showProductAnalysis && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-200">
+                      {Object.entries(productAnalysisData).map(([key, value]) => {
+                        if (!value) return null;
+                        return (
+                          <div key={key} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-1">
+                            <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                              {ANALYSIS_LABELS[key] ?? key}
+                            </p>
+                            <p className="text-xs leading-relaxed">{value}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Reference analysis (Option B only) */}
               {hasAnalysis && analysisData && (
                 <div className="space-y-3">
@@ -770,6 +839,7 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
                 className="gap-2"
                 onClick={() => {
                   setShowIntroCard(false);
+                  setShowProductAnalysis(false);
                   void fetchNextQuestion();
                 }}
               >
@@ -820,6 +890,38 @@ function QAPhase({ session, product }: { session: Session; product: Product | nu
             <h2 className="text-xl font-bold">Q&A Complete</h2>
             <p className="text-muted-foreground text-sm">Building your prompt...</p>
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {/* Product analysis summary — collapsible, shown above questions */}
+        {!showIntroCard && hasProductAnalysis && productAnalysisData && (
+          <div className="mb-4">
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 text-left py-2 px-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors"
+              onClick={() => setShowProductAnalysis((v) => !v)}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex-1">What AI sees in your photos</span>
+              <ChevronRight
+                className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 transition-transform ${showProductAnalysis ? "rotate-90" : ""}`}
+              />
+            </button>
+            {showProductAnalysis && (
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-200">
+                {Object.entries(productAnalysisData).map(([key, value]) => {
+                  if (!value) return null;
+                  return (
+                    <div key={key} className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-1">
+                      <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                        {ANALYSIS_LABELS[key] ?? key}
+                      </p>
+                      <p className="text-xs leading-relaxed">{value}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -1734,7 +1836,7 @@ export default function SessionPage() {
       refetchInterval: (query) => {
         const data = query.state.data as Session | undefined;
         const s = data?.status;
-        if (s === "generating" || s === "analyzing" || s === "analyzing_image" || s === "analyzing_vision") return 2000;
+        if (s === "generating" || s === "analyzing" || s === "analyzing_image" || s === "analyzing_vision" || s === "analyzing_products") return 2000;
         return false;
       },
     },
@@ -1767,6 +1869,17 @@ export default function SessionPage() {
             setStep={setStep}
             productId={session.productId}
           />
+        );
+      case "analyzing_products":
+        return (
+          <div className="flex flex-col items-center justify-center gap-5 py-24">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <div className="text-center space-y-1">
+              <h2 className="text-xl font-semibold">Analysing your product photos…</h2>
+              <p className="text-sm text-muted-foreground">The AI is identifying items, colours, materials, and arrangement.</p>
+              <p className="text-xs text-muted-foreground/70">This takes a few seconds and helps the Q&A skip product-description questions.</p>
+            </div>
+          </div>
         );
       case "analyzing":
       case "analyzing_image":

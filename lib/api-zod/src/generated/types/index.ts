@@ -29,6 +29,8 @@ export * from "./llmConfigDefaultValues";
 export * from "./llmConfigParamsSchema";
 export * from "./loginBody";
 export * from "./product";
+export * from "./productAnalysis";
+export * from "./productAnalysisAnalysis";
 export * from "./productStats";
 export * from "./qAAnswer";
 export * from "./qAOption";
