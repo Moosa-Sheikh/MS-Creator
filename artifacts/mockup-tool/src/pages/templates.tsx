@@ -43,6 +43,25 @@ type Template = {
 
 type QAAnswer = { question: string; answer: string };
 
+function TemplateThumb({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted">
+        <FolderOpen className="w-8 h-8 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 function resolveThumbUrl(url: string): string {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -92,7 +111,7 @@ function TemplateDetailModal({
             {imageUrls.length > 0 ? (
               <>
                 <div className="flex-1 overflow-hidden" style={{ maxHeight: "340px" }}>
-                  <img
+                  <TemplateThumb
                     src={resolveThumbUrl(activeImg)}
                     alt={template.name}
                     className="w-full h-full object-cover"
@@ -108,7 +127,7 @@ function TemplateDetailModal({
                           activeImg === url ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"
                         }`}
                       >
-                        <img src={resolveThumbUrl(url)} alt="" className="w-full h-full object-cover" />
+                        <TemplateThumb src={resolveThumbUrl(url)} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
@@ -308,7 +327,7 @@ export default function TemplatesPage() {
                     onClick={() => setDetailTemplate(tpl)}
                   >
                     {thumb ? (
-                      <img
+                      <TemplateThumb
                         src={thumb}
                         alt={tpl.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

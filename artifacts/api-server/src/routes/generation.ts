@@ -6,7 +6,7 @@ import {
   GenerateImagesBody,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService, archiveRemoteImage } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -212,11 +212,13 @@ async function generateSingleImage(
   // Queue-based API (has request_id) → poll for result
   if (data.request_id) {
     const queueResult = await pollFalQueue(data, falModel.endpoint, falApiKey, timeoutSecs, log);
-    return extractImageUrls(queueResult);
+    const urls = extractImageUrls(queueResult);
+    return Promise.all(urls.map((u) => archiveRemoteImage(u, log)));
   }
 
   // Sync API (result returned immediately)
-  return extractImageUrls(data);
+  const urls = extractImageUrls(data);
+  return Promise.all(urls.map((u) => archiveRemoteImage(u, log)));
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────

@@ -9,6 +9,46 @@ import {
   setObjectAclPolicy,
 } from "./objectAcl";
 
+/**
+ * Download an image from a remote URL (e.g. fal.io CDN) and save it to the
+ * private object-storage bucket so it stays accessible permanently.
+ *
+ * Returns the canonical `/objects/<uuid>` path understood by the storage route.
+ * Logs a warning and returns the original URL on any error so generation still
+ * succeeds even if storage is unavailable.
+ */
+export async function archiveRemoteImage(
+  remoteUrl: string,
+  log: { warn: (obj: unknown, msg?: string) => void }
+): Promise<string> {
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  if (!privateObjectDir) {
+    log.warn({ remoteUrl }, "PRIVATE_OBJECT_DIR not set — skipping image archive");
+    return remoteUrl;
+  }
+
+  try {
+    const res = await fetch(remoteUrl, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`fetch ${res.status}`);
+
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/uploads/${objectId}.${ext}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    await file.save(buffer, { contentType, resumable: false });
+
+    return `/objects/uploads/${objectId}.${ext}`;
+  } catch (err) {
+    log.warn({ remoteUrl, err }, "Could not archive generated image — keeping CDN URL");
+    return remoteUrl;
+  }
+}
+
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
 export const objectStorageClient = new Storage({
