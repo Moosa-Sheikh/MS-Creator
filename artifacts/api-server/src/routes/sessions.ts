@@ -308,10 +308,10 @@ Return ONLY valid JSON with these exact keys (no markdown, no explanation):
     }
 
     // If this is an Option B session and reference analysis hasn't been done yet,
-    // set status back to "draft" so the client knows to also run analyze-reference.
+    // set status to "analyzing_vision" so the client knows to also run analyze-reference.
     // Otherwise go straight to "qa".
     const needsReferenceAnalysis = session.optionType === "B" && session.referenceImageUrl && !session.referenceAnalysis;
-    const nextStatus = needsReferenceAnalysis ? "draft" : "qa";
+    const nextStatus = needsReferenceAnalysis ? "analyzing_vision" : "qa";
 
     await db
       .update(sessionsTable)
