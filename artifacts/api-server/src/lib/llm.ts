@@ -116,14 +116,9 @@ async function callOpenRouter(messages: LlmMessage[], config: LlmConfig, setting
 }
 
 async function callAnthropic(messages: LlmMessage[], config: LlmConfig, settings: Settings): Promise<string> {
-  const integrationBaseUrl = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
-  const integrationApiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
-  const apiKey = integrationBaseUrl ? (integrationApiKey ?? "_DUMMY_API_KEY_") : (config.apiKey || settings.claudeApiKey);
-  if (!apiKey && !integrationBaseUrl) throw new Error("Anthropic API key not set. Add it in Settings → API Keys or on the model config.");
-  const client = new Anthropic({
-    apiKey: apiKey ?? "_DUMMY_API_KEY_",
-    ...(integrationBaseUrl ? { baseURL: integrationBaseUrl } : {}),
-  });
+  const apiKey = config.apiKey || settings.claudeApiKey;
+  if (!apiKey) throw new Error("Anthropic API key not set. Add it in Settings → API Keys or on the model config.");
+  const client = new Anthropic({ apiKey });
   const sys = systemContent(messages);
   logger.info({ model: config.modelId }, "Calling Anthropic");
   const anthropicMessages: Anthropic.MessageParam[] = chatMessagesRaw(messages).map((m) => ({
