@@ -902,6 +902,9 @@ components:
           description: "F1-F6 — determined by optionType + referenceStyle + templateInspirationId"
         templateInspirationId:
           type: ["string", "null"]
+        sendReferenceToFal:
+          type: boolean
+          description: "F3/F4 only — whether to also pass the reference image to fal.io alongside product photos"
         createdAt:
           type: string
         updatedAt:
@@ -928,6 +931,7 @@ components:
         - status
         - flowId
         - templateInspirationId
+        - sendReferenceToFal
         - createdAt
         - updatedAt
 
@@ -1016,6 +1020,9 @@ components:
           type: ["string", "null"]
         templateInspirationId:
           type: ["string", "null"]
+        sendReferenceToFal:
+          type: ["boolean", "null"]
+          description: "F3/F4 only — whether to also pass the reference image to fal.io alongside product photos"
 
     ProductAnalysis:
       type: object

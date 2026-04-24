@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -193,6 +194,7 @@ function WizardStep({
     (session.referenceStyle as "SAME" | "IDEA") || "SAME"
   );
   const [similarityLevel, setSimilarityLevel] = useState(session.similarityLevel || 70);
+  const [sendReferenceToFal, setSendReferenceToFal] = useState<boolean>(session.sendReferenceToFal ?? false);
   const [templateInspirationId, setTemplateInspirationId] = useState(session.templateInspirationId || "");
 
   const { data: templates } = useListTemplates(
@@ -222,6 +224,7 @@ function WizardStep({
       referenceImageUrl: optionType === "B" ? referenceImageUrl : undefined,
       referenceStyle: optionType === "B" ? referenceStyle : undefined,
       similarityLevel: optionType === "B" && referenceStyle === "SAME" ? similarityLevel : undefined,
+      sendReferenceToFal: optionType === "B" && referenceStyle === "SAME" ? sendReferenceToFal : undefined,
       templateInspirationId: templateInspirationId || undefined,
     };
 
@@ -400,19 +403,37 @@ function WizardStep({
             ))}
           </div>
           {referenceStyle === "SAME" && (
-            <div className="space-y-2 pt-2">
-              <Label>Similarity Level: {similarityLevel}%</Label>
-              <Slider
-                value={[similarityLevel]}
-                onValueChange={([v]) => setSimilarityLevel(v)}
-                min={1}
-                max={100}
-                step={1}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Loose</span>
-                <span>Exact</span>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label>Similarity Level: {similarityLevel}%</Label>
+                <Slider
+                  value={[similarityLevel]}
+                  onValueChange={([v]) => setSimilarityLevel(v)}
+                  min={1}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Loose</span>
+                  <span>Exact</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-xl border border-border p-4">
+                <Switch
+                  id="sendReferenceToFal"
+                  checked={sendReferenceToFal}
+                  onCheckedChange={setSendReferenceToFal}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="sendReferenceToFal" className="cursor-pointer font-medium">
+                    Send reference image to image model
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When on, your reference image is passed directly to fal.io alongside your product photos — the model can see it as a visual guide. When off, only the product photos are sent and the AI describes the reference style in the prompt text instead.
+                  </p>
+                </div>
               </div>
             </div>
           )}

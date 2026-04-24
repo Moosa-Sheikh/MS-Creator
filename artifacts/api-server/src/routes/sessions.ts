@@ -96,6 +96,7 @@ router.patch("/sessions/:id", async (req, res): Promise<void> => {
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
   if (parsed.data.flowId !== undefined) updateData.flowId = parsed.data.flowId;
   if (parsed.data.templateInspirationId !== undefined) updateData.templateInspirationId = parsed.data.templateInspirationId;
+  if (parsed.data.sendReferenceToFal !== undefined) updateData.sendReferenceToFal = parsed.data.sendReferenceToFal;
 
   const [session] = await db
     .update(sessionsTable)

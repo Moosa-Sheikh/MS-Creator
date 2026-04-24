@@ -170,6 +170,11 @@ export const ListSessionsResponseItem = zod.object({
       "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
     ),
   templateInspirationId: zod.string().nullable(),
+  sendReferenceToFal: zod
+    .boolean()
+    .describe(
+      "F3\/F4 only — whether to also pass the reference image to fal.io alongside product photos",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -245,6 +250,11 @@ export const GetSessionResponse = zod.object({
       "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
     ),
   templateInspirationId: zod.string().nullable(),
+  sendReferenceToFal: zod
+    .boolean()
+    .describe(
+      "F3\/F4 only — whether to also pass the reference image to fal.io alongside product photos",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -281,6 +291,12 @@ export const UpdateSessionBody = zod.object({
   status: zod.string().nullish(),
   flowId: zod.string().nullish(),
   templateInspirationId: zod.string().nullish(),
+  sendReferenceToFal: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "F3\/F4 only — whether to also pass the reference image to fal.io alongside product photos",
+    ),
 });
 
 export const UpdateSessionResponse = zod.object({
@@ -331,6 +347,11 @@ export const UpdateSessionResponse = zod.object({
       "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
     ),
   templateInspirationId: zod.string().nullable(),
+  sendReferenceToFal: zod
+    .boolean()
+    .describe(
+      "F3\/F4 only — whether to also pass the reference image to fal.io alongside product photos",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -453,6 +474,11 @@ export const SubmitAnswerResponse = zod.object({
       "F1-F6 — determined by optionType + referenceStyle + templateInspirationId",
     ),
   templateInspirationId: zod.string().nullable(),
+  sendReferenceToFal: zod
+    .boolean()
+    .describe(
+      "F3\/F4 only — whether to also pass the reference image to fal.io alongside product photos",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -511,8 +537,18 @@ export const GenerateImagesBody = zod.object({
   falModelId: zod.string(),
   falParams: zod.record(zod.string(), zod.unknown()).optional(),
   imageCount: zod.number().nullish(),
-  imageIndex: zod.number().nullish(),
-  promptOverride: zod.string().nullish(),
+  imageIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "When set, regenerate only the image at this index (M2 sessions only). The other images are untouched.",
+    ),
+  promptOverride: zod
+    .string()
+    .nullish()
+    .describe(
+      "One-time prompt override for per-image regeneration. Replaces the stored variation prompt for this request only (not persisted).",
+    ),
 });
 
 export const GenerateImagesResponse = zod.object({

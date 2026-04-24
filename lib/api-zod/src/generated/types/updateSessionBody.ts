@@ -37,4 +37,9 @@ export interface UpdateSessionBody {
   flowId?: string | null;
   /** @nullable */
   templateInspirationId?: string | null;
+  /**
+   * F3/F4 only — whether to also pass the reference image to fal.io alongside product photos
+   * @nullable
+   */
+  sendReferenceToFal?: boolean | null;
 }

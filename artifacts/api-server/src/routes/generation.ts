@@ -167,6 +167,8 @@ async function generateSingleImage(
   falModel: { endpoint: string; defaultValues: unknown; paramsSchema: unknown },
   session: {
     productImageUrls?: string[] | null;
+    referenceImageUrl?: string | null;
+    sendReferenceToFal?: boolean | null;
   },
   userParams: Record<string, unknown>,
   falApiKey: string,
@@ -174,12 +176,16 @@ async function generateSingleImage(
   storageService: ObjectStorageService,
   log: { error: (obj: unknown, msg?: string) => void; warn: (obj: unknown, msg?: string) => void }
 ): Promise<string[]> {
-  // Build the image_urls array — only product photos go to fal.io.
-  // The reference image stays on the LLM side only (used for style analysis, not passed to the edit model).
+  // Build the image_urls array — product photos first, then optionally the reference image.
   const imageUrls: string[] = [];
   for (const p of session.productImageUrls ?? []) {
     const url = await objectPathToPublicUrl(p, storageService, log);
     imageUrls.push(url);
+  }
+  // If the user chose to send the reference image to fal.io, append it after product photos.
+  if (session.sendReferenceToFal && session.referenceImageUrl) {
+    const refUrl = await objectPathToPublicUrl(session.referenceImageUrl, storageService, log);
+    imageUrls.push(refUrl);
   }
 
   const requestBody: Record<string, unknown> = {
@@ -287,7 +293,7 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
       const urls = await generateSingleImage(
         imagePrompt,
         falModel,
-        { productImageUrls: session.productImageUrls },
+        { productImageUrls: session.productImageUrls, referenceImageUrl: session.referenceImageUrl, sendReferenceToFal: session.sendReferenceToFal },
         (parsed.data.falParams ?? {}) as Record<string, unknown>,
         settings.falApiKey,
         timeoutSecs,
@@ -341,7 +347,7 @@ router.post("/sessions/:id/generate", async (req, res): Promise<void> => {
         const urls = await generateSingleImage(
           imagePrompt,
           falModel,
-          { productImageUrls: session.productImageUrls },
+          { productImageUrls: session.productImageUrls, referenceImageUrl: session.referenceImageUrl, sendReferenceToFal: session.sendReferenceToFal },
           (parsed.data.falParams ?? {}) as Record<string, unknown>,
           settings.falApiKey,
           timeoutSecs,

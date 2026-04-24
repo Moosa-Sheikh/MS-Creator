@@ -116,6 +116,8 @@ export interface Session {
   flowId: string | null;
   /** @nullable */
   templateInspirationId: string | null;
+  /** F3/F4 only — whether to also pass the reference image to fal.io alongside product photos */
+  sendReferenceToFal: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -168,6 +170,11 @@ export interface UpdateSessionBody {
   flowId?: string | null;
   /** @nullable */
   templateInspirationId?: string | null;
+  /**
+   * F3/F4 only — whether to also pass the reference image to fal.io alongside product photos
+   * @nullable
+   */
+  sendReferenceToFal?: boolean | null;
 }
 
 export type ProductAnalysisAnalysis = { [key: string]: string };
@@ -234,9 +241,15 @@ export interface GenerateImagesBody {
   falParams?: GenerateImagesBodyFalParams;
   /** @nullable */
   imageCount?: number | null;
-  /** @nullable */
+  /**
+   * When set, regenerate only the image at this index (M2 sessions only). The other images are untouched.
+   * @nullable
+   */
   imageIndex?: number | null;
-  /** @nullable */
+  /**
+   * One-time prompt override for per-image regeneration. Replaces the stored variation prompt for this request only (not persisted).
+   * @nullable
+   */
   promptOverride?: string | null;
 }
 

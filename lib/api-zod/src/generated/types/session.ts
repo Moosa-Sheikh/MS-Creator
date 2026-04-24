@@ -66,6 +66,8 @@ export interface Session {
   flowId: string | null;
   /** @nullable */
   templateInspirationId: string | null;
+  /** F3/F4 only — whether to also pass the reference image to fal.io alongside product photos */
+  sendReferenceToFal: boolean;
   createdAt: string;
   updatedAt: string;
 }

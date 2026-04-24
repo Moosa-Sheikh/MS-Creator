@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -24,6 +24,7 @@ export const sessionsTable = pgTable("sessions", {
   status: text("status").notNull().default("draft"), // draft | analyzing_image | analyzing_vision | analyzing_products | qa | prompt_ready | generating | completed | failed
   flowId: text("flow_id"), // F1-F6 — computed from optionType + referenceStyle + templateInspirationId
   templateInspirationId: uuid("template_inspiration_id"),
+  sendReferenceToFal: boolean("send_reference_to_fal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

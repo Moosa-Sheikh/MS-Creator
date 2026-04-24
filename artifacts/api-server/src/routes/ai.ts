@@ -79,6 +79,8 @@ ${tplQASummary ? `Q&A answers that led to this template:\n${tplQASummary}\n` : "
         if (session.similarityLevel != null) {
           referenceSection += `\n  • Similarity target: ${session.similarityLevel}/100 (${session.similarityLevel >= 70 ? "high fidelity — replicate closely" : session.similarityLevel >= 40 ? "moderate — adapt meaningfully" : "loose — use as broad inspiration"})`;
         }
+        referenceSection += `\n  • sendReferenceToFal: ${session.sendReferenceToFal ? "true — the reference image WILL be passed directly to the image model (you do not need to describe it fully in text; the model can see it)" : "false — the reference image will NOT be passed to the image model (describe every visual detail explicitly in the final prompt text)"}`;
+
       }
     } catch {
       referenceSection = `\nReference image analysis: ${session.referenceAnalysis}`;
